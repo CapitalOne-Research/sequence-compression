@@ -1,0 +1,1115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Compression Playground · Recsys Example</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Serif:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<style>
+/* ── page wrapper ─────────────────────────────────────────────────── */
+.diagram-section {
+  max-width: 1020px;
+  margin: 0 auto;
+  padding: 0 64px 80px;
+}
+.diagram-label {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.07em;
+  color: var(--muted);
+  text-transform: uppercase;
+  margin-bottom: 28px;
+}
+
+/* ── canvas ───────────────────────────────────────────────────────── */
+.diagram-canvas {
+  position: relative;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-2);
+  height: 600px;
+  overflow: visible;
+}
+
+/* ── SVG layer ────────────────────────────────────────────────────── */
+.diagram-svg-layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+/* ── shared node base ─────────────────────────────────────────────── */
+.diag-node {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  background: var(--surface);
+  border: 1.5px solid var(--accent);
+  border-radius: var(--r-md);
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  box-shadow: var(--shadow-2), 0 0 0 3px var(--accent-glow);
+  padding: 12px 16px;
+  box-sizing: border-box;
+  line-height: 1.3;
+}
+
+/* de-emphasised variant for training / artifact */
+.diag-node.dim {
+  background: var(--surface-tint);
+  border: 1px solid var(--border);
+  box-shadow: none;
+  color: var(--soft);
+  font-weight: 400;
+}
+
+/* send button */
+.diag-btn {
+  position: absolute;
+  background: var(--neg-soft);
+  border: 1.5px solid #d4908c;
+  border-radius: 10px;
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--neg);
+  cursor: pointer;
+  text-align: center;
+  line-height: 1.35;
+  padding: 12px 20px;
+  box-shadow: var(--shadow-2);
+  transition: background var(--t-base) var(--ease),
+              box-shadow var(--t-base) var(--ease),
+              transform 80ms;
+  user-select: none;
+  box-sizing: border-box;
+}
+.diag-btn:hover { background: #f0d0ce; box-shadow: var(--shadow-3); }
+.diag-btn:active { transform: scale(0.97); }
+.diag-btn.fired {
+  background: var(--pos-soft);
+  border-color: #7abf99;
+  color: var(--pos);
+  cursor: default;
+}
+
+/* model inference outer container */
+.diag-outer {
+  position: absolute;
+  background: var(--accent-tint);
+  border: 1.5px solid var(--accent);
+  border-radius: var(--r-lg);
+  box-sizing: border-box;
+  padding: 16px 20px 18px;
+  box-shadow: var(--shadow-2), 0 0 0 3px var(--accent-glow);
+}
+.diag-outer .outer-title {
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  margin-bottom: 4px;
+}
+.diag-outer .outer-sub {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--accent);
+}
+.diag-outer .inner-box {
+  background: var(--surface);
+  border: 1px solid var(--accent-soft);
+  border-radius: var(--r-md);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink-soft);
+  text-align: center;
+  padding: 12px 14px 10px;
+  margin-top: 10px;
+  font-family: 'IBM Plex Sans', sans-serif;
+  min-height: 56px;
+}
+
+/* ── payload pills — standalone absolutely-positioned ────────────── */
+.payload-pill {
+  position: absolute;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.03em;
+  color: var(--accent-strong);
+  border: 1px solid var(--accent-soft);
+  border-radius: 4px;
+  padding: 6px 10px;
+  text-align: center;
+  line-height: 1.5;
+  cursor: default;
+  box-sizing: border-box;
+  background: var(--accent-tint);
+  transition: all var(--t-base) var(--ease);
+  white-space: normal;
+  word-break: keep-all;
+}
+.payload-pill.active {
+  color: var(--surface);
+  border-color: var(--accent);
+  border-style: solid;
+  cursor: pointer;
+  background: var(--accent);
+  box-shadow: var(--shadow-1);
+}
+.payload-pill.active:hover {
+  background: var(--accent-strong);
+  border-color: var(--accent-strong);
+}
+
+/* tooltip */
+.pill-tooltip {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--ink);
+  color: var(--on-dark);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  line-height: 1.65;
+  white-space: pre;
+  padding: 12px 16px;
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-3);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--t-fast) var(--ease);
+  z-index: 60;
+  text-align: left;
+  min-width: 270px;
+}
+.pill-tooltip .tooltip-diff {
+  background: rgba(15, 110, 64, 0.35);
+  color: #7effc0;
+  border-radius: 2px;
+  padding: 0 2px;
+}
+.pill-tooltip::after {
+  content: '';
+  position: absolute;
+  top: 100%; left: 50%;
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-top-color: var(--ink);
+}
+.payload-pill.active:hover .pill-tooltip,
+.payload-pill.active:focus .pill-tooltip { opacity: 1; }
+
+/* ── latency badge ────────────────────────────────────────────────── */
+.latency-badge {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  background: var(--surface);
+  border: 1.5px solid var(--accent);
+  border-radius: var(--r-md);
+  padding: 8px 12px;
+  box-shadow: var(--shadow-2), 0 0 0 3px var(--accent-glow);
+  opacity: 0;
+  transition: opacity 400ms var(--ease);
+  box-sizing: border-box;
+  min-width: 90px;
+}
+.latency-badge.visible { opacity: 1; }
+.latency-badge .lat-label {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.latency-badge .lat-value {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 28px;
+  font-weight: 600;
+  color: var(--neg);
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+.latency-badge .lat-unit {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px;
+  color: var(--muted);
+}
+
+/* ── SVG arrow animations ─────────────────────────────────────────── */
+@keyframes flow-right { from { stroke-dashoffset: 24; } to { stroke-dashoffset: 0; } }
+@keyframes flow-left  { from { stroke-dashoffset: 0;  } to { stroke-dashoffset: 24; } }
+@keyframes flow-down  { from { stroke-dashoffset: 24; } to { stroke-dashoffset: 0; } }
+@keyframes flow-up    { from { stroke-dashoffset: 0;  } to { stroke-dashoffset: 24; } }
+@keyframes pulse-dot {
+  0%   { r: 5; opacity: 1; }
+  60%  { r: 9; opacity: 0.3; }
+  100% { r: 5; opacity: 1; }
+}
+
+.anim-arrow {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2;
+  stroke-dasharray: 8 4;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  animation-duration: 480ms;
+}
+.anim-arrow.right { animation-name: flow-right; }
+.anim-arrow.left  { animation-name: flow-left;  }
+.anim-arrow.down  { animation-name: flow-down;  }
+.anim-arrow.up    { animation-name: flow-up;    }
+
+.packet-dot {
+  fill: var(--accent);
+  opacity: 0;
+  transition: opacity 150ms;
+}
+.packet-dot.visible {
+  opacity: 1;
+  animation: pulse-dot 800ms ease-in-out infinite;
+}
+
+/* ── SVG text styles ──────────────────────────────────────────────── */
+.arrow-label {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px;
+  fill: var(--muted);
+  letter-spacing: 0.02em;
+}
+.deploy-label {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px;
+  fill: var(--soft);
+}
+
+/* ── inference progress bar (inside inner-box) ───────────────────── */
+.inference-progress-wrap {
+  margin-top: 10px;
+  height: 5px;
+  background: var(--border);
+  border-radius: 3px;
+  overflow: hidden;
+  opacity: 0;
+  transition: opacity 200ms;
+}
+.inference-progress-wrap.visible { opacity: 1; }
+.inference-progress-bar {
+  height: 100%;
+  width: 0%;
+  background: var(--accent);
+  border-radius: 3px;
+  transition: none;
+}
+
+/* ── SeqPack-specific highlight (diagram 2 only) ─────────────────── */
+.seqpack-highlight {
+  background: var(--pos-soft) !important;
+  border: 1.5px solid var(--pos) !important;
+  color: var(--pos) !important;
+  font-weight: 600 !important;
+  box-shadow: 0 0 0 3px rgba(15, 110, 64, 0.12);
+}
+.seqpack-subtitle {
+  color: var(--pos) !important;
+  font-weight: 600;
+}
+
+/* ── reset link ───────────────────────────────────────────────────── */
+.diagram-reset {
+  display: none;
+  position: absolute;
+  bottom: 16px;
+  right: 22px;
+  font-size: 11px;
+  font-family: 'IBM Plex Mono', monospace;
+  color: var(--muted);
+  cursor: pointer;
+  letter-spacing: 0.03em;
+}
+.diagram-reset:hover { color: var(--accent); }
+.diagram-reset.visible { display: block; }
+</style>
+</head>
+<body>
+
+<div class="grain" aria-hidden="true"></div>
+
+<!-- ─────────────────  MASTHEAD  ───────────────── -->
+<header class="masthead">
+  <h1 class="title">
+    <span class="title-roman">Compression</span>
+    <span class="title-italic">Playground</span>
+  </h1>
+
+  <p class="masthead-tagline">
+    End-to-end walkthrough of a real-time recommender inference request &mdash;
+    from upstream service to model endpoint, with payload inspection and
+    measured round-trip latency.
+  </p>
+
+  <nav class="masthead-nav">
+    <a href="/" class="nav-link">
+      <span class="nav-arrow">←</span> encode a file
+    </a>
+    <a href="/inspector.html" class="nav-link">
+      <span class="nav-glyph">✦</span> inspector
+    </a>
+    <a href="/schemes.html" class="nav-link">
+      <span class="nav-glyph">✦</span> schemes
+    </a>
+    <span class="nav-current">
+      <span class="nav-glyph">✦</span> recsys example
+    </span>
+  </nav>
+
+  <div class="hot-rule"></div>
+</header>
+
+
+<!-- ─────────────────  SECTION  ───────────────── -->
+<section class="section">
+  <div class="section-num">§ 00.</div>
+  <h2 class="section-title">Recsys <em> Example</em></h2>
+  <div class="section-body">
+    <p class="lede">
+      A recommender system inference call starts with feature sequences retrieval from a
+      data store and ends with scored/ranked candidates returned to the upstream service.
+      Click <strong>Send RT Recommendation Request</strong> to animate the round-trip
+      and inspect the payloads at each hop.
+      <br><br>
+      <em>Note: the E2E latency displayed is simulated value based on actual performance tests results.</em>
+    </p>
+  </div>
+</section>
+
+
+<!-- ─────────────────  DIAGRAM  ───────────────── -->
+<div class="diagram-section">
+  <div class="diagram-label">w/o SeqPack compression · runtime request flow</div>
+
+  <div class="diagram-canvas" id="diagramCanvas">
+
+    <!-- ── SVG arrow layer ─────────────────────────────────────────── -->
+    <svg class="diagram-svg-layer" id="arrowSvg" aria-hidden="true">
+      <defs>
+        <marker id="ah" markerWidth="9" markerHeight="9" refX="7" refY="3.5" orient="auto">
+          <path d="M0,0 L0,7 L9,3.5 z" fill="#8BAFC0"/>
+        </marker>
+        <marker id="ah-acc" markerWidth="9" markerHeight="9" refX="7" refY="3.5" orient="auto">
+          <path d="M0,0 L0,7 L9,3.5 z" fill="#0E5570"/>
+        </marker>
+        <marker id="ah-soft" markerWidth="9" markerHeight="9" refX="7" refY="3.5" orient="auto">
+          <path d="M0,0 L0,7 L9,3.5 z" fill="#98A0AB"/>
+        </marker>
+        <marker id="ah-mid" markerWidth="9" markerHeight="9" refX="7" refY="3.5" orient="auto">
+          <path d="M0,0 L0,7 L9,3.5 z" fill="#5C636B"/>
+        </marker>
+      </defs>
+
+      <!-- ── static arrows (always visible) ── -->
+      <!-- Data Store ↔ Upstream Service -->
+      <path id="arr-s2u" fill="none" stroke="#8BAFC0" stroke-width="1.5" marker-end="url(#ah)" d=""/>
+      <path id="arr-u2s" fill="none" stroke="#8BAFC0" stroke-width="1.5" marker-end="url(#ah)" d=""/>
+
+      <!-- Upstream Service ↔ Model Inference -->
+      <path id="arr-req" fill="none" stroke="#8BAFC0" stroke-width="1.5" marker-end="url(#ah)" d=""/>
+      <path id="arr-resp" fill="none" stroke="#8BAFC0" stroke-width="1.5" marker-end="url(#ah)" d=""/>
+
+      <!-- Model Training → Trained Artifact (dashed) -->
+      <path id="arr-train" fill="none" stroke="#C5CAD2" stroke-width="1"
+            stroke-dasharray="4 4" marker-end="url(#ah-soft)" d=""/>
+
+      <!-- Trained Artifact → Model Inference (dashed) -->
+      <path id="arr-deploy" fill="none" stroke="#C5CAD2" stroke-width="1"
+            stroke-dasharray="4 4" marker-end="url(#ah-soft)" d=""/>
+      <text id="lbl-deploy" class="deploy-label" text-anchor="middle"></text>
+
+      <!-- Feature Compute → Data Store (vertical, darker, diagram 1 only) -->
+      <path id="arr-fc2store" fill="none" stroke="#5C636B" stroke-width="1.5"
+            stroke-dasharray="5 4" marker-end="url(#ah-mid)" d=""/>
+      <text id="lbl-fc2store" class="deploy-label"
+            style="fill:#283038; font-size:10px;" text-anchor="start"></text>
+
+      <!-- ── animated overlays (hidden until animation plays) ── -->
+      <!-- phase 1: store ↔ upstream -->
+      <path id="anim-s2u" class="anim-arrow right" d="" style="display:none" marker-end="url(#ah-acc)"/>
+      <path id="anim-u2s" class="anim-arrow left"  d="" style="display:none" marker-end="url(#ah-acc)"/>
+      <!-- phase 2: upstream ↔ model (vertical) -->
+      <path id="anim-req"  class="anim-arrow down" d="" style="display:none" marker-end="url(#ah-acc)"/>
+      <path id="anim-resp" class="anim-arrow up"   d="" style="display:none" marker-end="url(#ah-acc)"/>
+
+      <!-- moving packet dots (4 total) -->
+      <circle id="dot-s2u"  class="packet-dot" r="5" cx="-99" cy="-99"/>
+      <circle id="dot-u2s"  class="packet-dot" r="5" cx="-99" cy="-99"/>
+      <circle id="dot-req"  class="packet-dot" r="5" cx="-99" cy="-99"/>
+      <circle id="dot-resp" class="packet-dot" r="5" cx="-99" cy="-99"/>
+    </svg>
+
+    <!-- ── DOM nodes ──────────────────────────────────────────────── -->
+
+    <!-- Send button -->
+    <button class="diag-btn" id="btnSend">
+      Send RT<br>Recommendation<br>Request
+    </button>
+
+    <!-- Data Store (standard DB cylinder: dome on top, flat on bottom, label below) -->
+    <div class="diag-node" id="nodeStore"
+         style="background:transparent; padding:0; border:none; box-shadow:none; gap:0; align-items:center;">
+      <!-- standard cylinder: dome top, flat bottom -->
+      <svg width="96" height="62" viewBox="0 0 96 62" style="display:block;">
+        <!-- body sides -->
+        <rect x="8" y="14" width="80" height="34" fill="var(--accent-tint)"/>
+        <line x1="8"  y1="14" x2="8"  y2="48" stroke="var(--accent)" stroke-width="1.5"/>
+        <line x1="88" y1="14" x2="88" y2="48" stroke="var(--accent)" stroke-width="1.5"/>
+        <!-- flat bottom cap -->
+        <ellipse cx="48" cy="48" rx="40" ry="10" fill="var(--accent-tint)" stroke="var(--accent)" stroke-width="1.5"/>
+        <!-- dome top cap -->
+        <ellipse cx="48" cy="14" rx="40" ry="12" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="1.5"/>
+      </svg>
+      <div style="font-family:'IBM Plex Sans',sans-serif; font-size:13px; font-weight:600;
+                  color:var(--ink); margin-top:6px;">Data Store</div>
+      <div style="font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--accent);
+                  margin-top:2px;">(raw feature seq)</div>
+    </div>
+
+    <!-- Upstream Service -->
+    <div class="diag-node" id="nodeUpstream">Upstream Service</div>
+
+    <!-- Model Inference outer container (no pills inside) -->
+    <div class="diag-outer" id="nodeModelOuter">
+      <div class="outer-title">Model Inference <span class="outer-sub">(API endpoint)</span></div>
+      <div class="inner-box">
+        Inference Logic
+        <div class="inference-progress-wrap" id="inferenceWrap">
+          <div class="inference-progress-bar" id="inferenceBar"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Payload pills — standalone, positioned on the vertical arrows by JS -->
+    <div class="payload-pill" id="pillReq" tabindex="-1">
+      Inference Request Payload
+      <span class="pill-tooltip" id="tooltipReq"></span>
+    </div>
+    <div class="payload-pill" id="pillResp" tabindex="-1">
+      Inference Response Payload
+      <span class="pill-tooltip" id="tooltipResp"></span>
+    </div>
+
+    <!-- Model Training (de-emphasised) -->
+    <div class="diag-node dim" id="nodeTraining">Model Training</div>
+
+    <!-- Feature Compute (same style as active nodes, diagram 1 only) -->
+    <div class="diag-node" id="nodeFeatureCompute">Feature Seq Compute</div>
+
+    <!-- Trained Artifact (de-emphasised, dog-ear) -->
+    <div class="diag-node dim" id="nodeArtifact"
+         style="border-radius:var(--r-md) var(--r-md) 12px 12px; overflow:hidden;">
+      Trained Artifact
+      <span style="position:absolute;bottom:0;right:0;width:13px;height:13px;
+                   background:var(--surface-tint);
+                   border-top:1px solid var(--border);
+                   border-left:1px solid var(--border);
+                   border-radius:0 0 var(--r-md) 0;"></span>
+    </div>
+
+    <!-- Latency badge -->
+    <div class="latency-badge" id="latencyBadge">
+      <span class="lat-label">E2E Latency</span>
+      <span class="lat-value" id="latValue">—</span>
+      <span class="lat-unit">ms</span>
+    </div>
+
+    <!-- Reset -->
+    <div class="diagram-reset" id="btnReset">↺ reset diagram</div>
+
+  </div>
+</div>
+
+
+<!-- ─────────────────  DIAGRAM 2  ───────────────── -->
+<div class="diagram-section">
+  <div class="diagram-label">w/ SeqPack compression · runtime request flow</div>
+
+  <div class="diagram-canvas" id="diagramCanvas2" style="height:680px;">
+
+    <svg class="diagram-svg-layer" id="arrowSvg2" aria-hidden="true">
+      <defs>
+        <marker id="ah2" markerWidth="9" markerHeight="9" refX="7" refY="3.5" orient="auto">
+          <path d="M0,0 L0,7 L9,3.5 z" fill="#8BAFC0"/>
+        </marker>
+        <marker id="ah-acc2" markerWidth="9" markerHeight="9" refX="7" refY="3.5" orient="auto">
+          <path d="M0,0 L0,7 L9,3.5 z" fill="#0E5570"/>
+        </marker>
+        <marker id="ah-soft2" markerWidth="9" markerHeight="9" refX="7" refY="3.5" orient="auto">
+          <path d="M0,0 L0,7 L9,3.5 z" fill="#98A0AB"/>
+        </marker>
+        <marker id="ah-mid2" markerWidth="9" markerHeight="9" refX="7" refY="3.5" orient="auto">
+          <path d="M0,0 L0,7 L9,3.5 z" fill="#5C636B"/>
+        </marker>
+      </defs>
+      <path id="arr-s2u2" fill="none" stroke="#8BAFC0" stroke-width="1.5" marker-end="url(#ah2)" d=""/>
+      <path id="arr-u2s2" fill="none" stroke="#8BAFC0" stroke-width="1.5" marker-end="url(#ah2)" d=""/>
+      <path id="arr-req2" fill="none" stroke="#8BAFC0" stroke-width="1.5" marker-end="url(#ah2)" d=""/>
+      <path id="arr-resp2" fill="none" stroke="#8BAFC0" stroke-width="1.5" marker-end="url(#ah2)" d=""/>
+      <path id="arr-train2" fill="none" stroke="#C5CAD2" stroke-width="1" stroke-dasharray="4 4" marker-end="url(#ah-soft2)" d=""/>
+      <path id="arr-deploy2" fill="none" stroke="#C5CAD2" stroke-width="1" stroke-dasharray="4 4" marker-end="url(#ah-soft2)" d=""/>
+      <text id="lbl-deploy2" class="deploy-label" text-anchor="middle"></text>
+      <!-- Feature Compute → SeqPack Encoding → Data Store (diagram 2) -->
+      <path id="arr-fc2store2" fill="none" stroke="#5C636B" stroke-width="1.5"
+            stroke-dasharray="5 4" marker-end="url(#ah-mid2)" d=""/>
+      <text id="lbl-fc2store2" class="deploy-label"
+            style="fill:#283038; font-size:10px;" text-anchor="start"></text>
+      <path id="anim-s2u2" class="anim-arrow right" d="" style="display:none" marker-end="url(#ah-acc2)"/>
+      <path id="anim-u2s2" class="anim-arrow left"  d="" style="display:none" marker-end="url(#ah-acc2)"/>
+      <path id="anim-req2"  class="anim-arrow down" d="" style="display:none" marker-end="url(#ah-acc2)"/>
+      <path id="anim-resp2" class="anim-arrow up"   d="" style="display:none" marker-end="url(#ah-acc2)"/>
+      <circle id="dot-s2u2"  class="packet-dot" r="5" cx="-99" cy="-99"/>
+      <circle id="dot-u2s2"  class="packet-dot" r="5" cx="-99" cy="-99"/>
+      <circle id="dot-req2"  class="packet-dot" r="5" cx="-99" cy="-99"/>
+      <circle id="dot-resp2" class="packet-dot" r="5" cx="-99" cy="-99"/>
+    </svg>
+
+    <button class="diag-btn" id="btnSend2">
+      Send RT<br>Recommendation<br>Request
+    </button>
+
+    <div class="diag-node" id="nodeStore2"
+         style="background:transparent; padding:0; border:none; box-shadow:none; gap:0; align-items:center;">
+      <svg width="96" height="62" viewBox="0 0 96 62" style="display:block;">
+        <rect x="8" y="14" width="80" height="34" fill="var(--accent-tint)"/>
+        <line x1="8"  y1="14" x2="8"  y2="48" stroke="var(--accent)" stroke-width="1.5"/>
+        <line x1="88" y1="14" x2="88" y2="48" stroke="var(--accent)" stroke-width="1.5"/>
+        <ellipse cx="48" cy="48" rx="40" ry="10" fill="var(--accent-tint)" stroke="var(--accent)" stroke-width="1.5"/>
+        <ellipse cx="48" cy="14" rx="40" ry="12" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="1.5"/>
+      </svg>
+      <div style="font-family:'IBM Plex Sans',sans-serif; font-size:13px; font-weight:600;
+                  color:var(--ink); margin-top:6px;">Data Store</div>
+      <div style="font-family:'IBM Plex Mono',monospace; font-size:11px;
+                  margin-top:2px;" class="seqpack-subtitle">(SeqPack&nbsp;encoded&nbsp;feature&nbsp;seq)</div>
+    </div>
+
+    <div class="diag-node" id="nodeUpstream2">Upstream Service</div>
+
+    <div class="diag-outer" id="nodeModelOuter2">
+      <div class="outer-title">Model Inference <span class="outer-sub">(API endpoint)</span></div>
+      <div class="inner-box seqpack-highlight" id="nodeDecodeOuter2">
+        SeqPack Decoding Logic
+        <div class="inference-progress-wrap" id="decodeWrap2">
+          <div class="inference-progress-bar" id="decodeBar2"></div>
+        </div>
+      </div>
+      <div class="inner-box">
+        Inference Logic
+        <div class="inference-progress-wrap" id="inferenceWrap2">
+          <div class="inference-progress-bar" id="inferenceBar2"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="payload-pill" id="pillReq2" tabindex="-1">
+      Inference Request Payload
+      <span class="pill-tooltip" id="tooltipReq2"></span>
+    </div>
+    <div class="payload-pill" id="pillResp2" tabindex="-1">
+      Inference Response Payload
+      <span class="pill-tooltip" id="tooltipResp2"></span>
+    </div>
+
+    <div class="diag-node dim" id="nodeTraining2">Model Training</div>
+
+    <div class="diag-node dim" id="nodeArtifact2"
+         style="border-radius:var(--r-md) var(--r-md) 12px 12px; overflow:hidden;">
+      Trained Artifact
+      <span style="position:absolute;bottom:0;right:0;width:13px;height:13px;
+                   background:var(--surface-tint);
+                   border-top:1px solid var(--border);
+                   border-left:1px solid var(--border);
+                   border-radius:0 0 var(--r-md) 0;"></span>
+    </div>
+
+    <!-- Feature Compute (same style as diagram 1) -->
+    <div class="diag-node" id="nodeFeatureCompute2">Feature Seq Compute</div>
+
+    <!-- SeqPack Encoding Logic (new node, below Feature Compute) -->
+    <div class="diag-node seqpack-highlight" id="nodeSeqPackEncode2">SeqPack Encoding Logic</div>
+
+    <div class="latency-badge" id="latencyBadge2">
+      <span class="lat-label">E2E Latency</span>
+      <span class="lat-value" id="latValue2">—</span>
+      <span class="lat-unit">ms</span>
+    </div>
+
+    <div class="diagram-reset" id="btnReset2">↺ reset diagram</div>
+
+  </div>
+</div>
+
+
+<!-- ─────────────────  STATUS BAR  ───────────────── -->
+<footer class="status-bar">
+  <span class="status-dot" id="statusDot"></span>
+  <span id="statusLabel">RECSYS EXAMPLE</span>
+  <span class="status-sep">━━</span>
+  <span id="statusDetail">real-time recommendation · request flow animation</span>
+  <span class="status-spacer"></span>
+  <span class="status-meta">compression playground · recsys example</span>
+</footer>
+
+<script>
+'use strict';
+
+/* ── payload content per diagram ─────────────────────────────────── */
+const PAYLOADS = {
+  '': {
+    req: `{
+    "model_id": "recsys",
+    "user_id": "ABC",
+    "context": {
+        "session_id": "123",
+        "timestamp": 1720656000
+    },
+    "features": {
+        <span class="tooltip-diff">"f1": [0,0,1,1,1,0,0,1,1,1,0,0,1,1,1],
+        "f2": [0,2,2,1,1,0,2,2,1,1,0,2,2,1,1],
+        "f3": [1,0,1,1,2,1,0,1,1,2,1,0,1,1,2]</span>
+    },
+    "items": {
+        "item1": {"id": "001", "name": "A"},
+        "item2": {"id": "002", "name": "B"},
+        "item3": {"id": "003", "name": "C"}
+    }
+}`,
+    resp: `{
+    "model_id": "recsys",
+    "user_id": "ABC",
+    "context": {
+        "session_id": "123",
+        "timestamp": 1720656000
+    },
+    "features": {
+        <span class="tooltip-diff">"f1": [0,0,1,1,1,0,0,1,1,1,0,0,1,1,1],
+        "f2": [0,2,2,1,1,0,2,2,1,1,0,2,2,1,1],
+        "f3": [1,0,1,1,2,1,0,1,1,2,1,0,1,1,2]</span>
+    },
+    "items": {
+        "item1": {"id": "001", "name": "A", "score": 0.9},
+        "item2": {"id": "002", "name": "B", "score": 0.5},
+        "item3": {"id": "003", "name": "C", "score": 0.1}
+    }
+}`,
+  },
+  '2': {
+    req: `{
+    "model_id": "recsys",
+    "user_id": "ABC",
+    "context": {
+        "session_id": "123",
+        "timestamp": 1720656000
+    },
+    "features": {
+        <span class="tooltip-diff">"f1": "encoded_f1",
+        "f2": "encoded_f2",
+        "f3": "encoded_f3"</span>
+    },
+    "items": {
+        "item1": {"id": "001", "name": "A"},
+        "item2": {"id": "002", "name": "B"},
+        "item3": {"id": "003", "name": "C"}
+    }
+}`,
+    resp: `{
+    "model_id": "recsys",
+    "user_id": "ABC",
+    "context": {
+        "session_id": "123",
+        "timestamp": 1720656000
+    },
+    "features": {
+        <span class="tooltip-diff">"f1": "encoded_f1",
+        "f2": "encoded_f2",
+        "f3": "encoded_f3"</span>
+    },
+    "items": {
+        "item1": {"id": "001", "name": "A", "score": 0.9},
+        "item2": {"id": "002", "name": "B", "score": 0.5},
+        "item3": {"id": "003", "name": "C", "score": 0.1}
+    }
+}`,
+  },
+};
+
+/* ────────────────────────────────────────────────────────────────────
+   makeDiagram(s) — creates a fully independent diagram instance.
+   Every element id is suffixed with `s` ('' for diagram 1, '2' for
+   diagram 2) so the two canvases don't share any state.
+   ──────────────────────────────────────────────────────────────────── */
+function makeDiagram(s) {
+  /* element refs */
+  const canvas        = document.getElementById('diagramCanvas' + s);
+  const btnSend       = document.getElementById('btnSend' + s);
+  const btnReset      = document.getElementById('btnReset' + s);
+  const latBadge      = document.getElementById('latencyBadge' + s);
+  const latValue      = document.getElementById('latValue' + s);
+  const pillReq       = document.getElementById('pillReq' + s);
+  const pillResp      = document.getElementById('pillResp' + s);
+  const tooltipReq    = document.getElementById('tooltipReq' + s);
+  const tooltipResp   = document.getElementById('tooltipResp' + s);
+  const statusDetail  = document.getElementById('statusDetail');
+  const inferenceWrap = document.getElementById('inferenceWrap' + s);
+  const inferenceBar  = document.getElementById('inferenceBar' + s);
+  const decodeWrap    = s === '2' ? document.getElementById('decodeWrap2')  : null;
+  const decodeBar     = s === '2' ? document.getElementById('decodeBar2')   : null;
+
+  /* layout constants */
+  const ROW_BTN   =  44;
+  const ROW_UPPER = 230;
+  const ROW_LOWER = 450;
+  const SZ = {
+    btn:      { w: 152, h: 84  },
+    store:    { w: 130, h: 110 },
+    upstream: { w: 200, h: 54  },
+    model:    { w: 260, h: s === '2' ? 210 : 150 },
+    training: { w: 130, h: 50  },
+    artifact: { w: 130, h: 50  },
+    latency:  { w: 108, h: 80  },
+    pillReq:  { w: 116, h: 0   },
+    pillResp: { w: 116, h: 0   },
+    featureCompute: { w: 190, h: 36 },
+    seqpackEncode:  { w: 190, h: 36 },
+  };
+  const GAP_TRAIN_ART = 44;
+  const GAP_ART_MODEL = 90;
+  const LEFT_OFFSET   = -60;
+  const UPPER_GAP     = 80;
+
+  function cw() { return canvas.getBoundingClientRect().width; }
+
+  function lowerRowLeft() {
+    const totalW = SZ.training.w + GAP_TRAIN_ART + SZ.artifact.w + GAP_ART_MODEL + SZ.model.w;
+    return Math.round((cw() - totalW) / 2) + LEFT_OFFSET;
+  }
+
+  function nodePos(name) {
+    const sz  = SZ[name];
+    const lrl = lowerRowLeft();
+    const modelLeft    = lrl + SZ.training.w + GAP_TRAIN_ART + SZ.artifact.w + GAP_ART_MODEL;
+    const modelCentreX = modelLeft + SZ.model.w / 2;
+    const upstreamLeft = modelCentreX - SZ.upstream.w / 2;
+    const storeCentreX = upstreamLeft - UPPER_GAP - SZ.store.w / 2;
+    switch (name) {
+      case 'btn':      return { left: modelCentreX - sz.w / 2, top: ROW_BTN };
+      case 'store':    return { left: storeCentreX - sz.w / 2, top: ROW_UPPER - sz.h / 2 };
+      case 'upstream': return { left: upstreamLeft,            top: ROW_UPPER - sz.h / 2 };
+      case 'model':    return { left: modelLeft,               top: ROW_LOWER - sz.h / 2 };
+      case 'training': return { left: lrl,                     top: ROW_LOWER - sz.h / 2 };
+      case 'artifact': return { left: lrl + SZ.training.w + GAP_TRAIN_ART, top: ROW_LOWER - sz.h / 2 };
+      case 'latency':  return { left: modelCentreX + SZ.upstream.w / 2 + 20, top: ROW_UPPER - sz.h / 2 };
+      case 'featureCompute': {
+        if (s === '2') {
+          // in diagram 2, sit directly above seqpackEncode with a 4px gap
+          const storeTop = ROW_UPPER - SZ.store.h / 2;
+          const spTop = storeTop - 60 - SZ.seqpackEncode.h;
+          return { left: storeCentreX - sz.w / 2, top: spTop - 4 - sz.h };
+        }
+        // diagram 1: directly above Data Store
+        return { left: storeCentreX - sz.w / 2, top: ROW_UPPER - SZ.store.h / 2 - 64 - sz.h };
+      }
+      case 'seqpackEncode': {
+        // below featureCompute, above Data Store — leave a 16px gap on each side
+        const storeTop = ROW_UPPER - SZ.store.h / 2;
+        return { left: storeCentreX - sz.w / 2, top: storeTop - 60 - sz.h };
+      }
+      default:         return { left: 0, top: 0 };
+    }
+  }
+
+  function place(id, name) {
+    const el = document.getElementById(id + s);
+    const p  = nodePos(name);
+    const sz = SZ[name];
+    el.style.left  = p.left + 'px';
+    el.style.top   = p.top  + 'px';
+    el.style.width = sz.w   + 'px';
+    if (name !== 'store') el.style.height = sz.h + 'px';
+  }
+
+  function bb(id) {
+    const el = document.getElementById(id + s);
+    const er = el.getBoundingClientRect();
+    const cr = canvas.getBoundingClientRect();
+    return {
+      l: er.left - cr.left, r: er.right - cr.left,
+      t: er.top  - cr.top,  b: er.bottom - cr.top,
+      cx: er.left + er.width  / 2 - cr.left,
+      cy: er.top  + er.height / 2 - cr.top,
+      w: er.width, h: er.height,
+    };
+  }
+
+  function setD(id, d) { document.getElementById(id + s).setAttribute('d', d); }
+
+  function drawArrows() {
+    const store    = bb('nodeStore');
+    const upstream = bb('nodeUpstream');
+    const model    = bb('nodeModelOuter');
+    const training = bb('nodeTraining');
+    const artifact = bb('nodeArtifact');
+    const G = 8;
+
+    const hY = (store.cy + upstream.cy) / 2;
+    setD('arr-s2u',  `M ${store.r + G} ${hY + 7} L ${upstream.l - G} ${hY + 7}`);
+    setD('arr-u2s',  `M ${upstream.l - G} ${hY - 7} L ${store.r + G} ${hY - 7}`);
+    setD('anim-s2u', `M ${store.r + G} ${hY + 7} L ${upstream.l - G} ${hY + 7}`);
+    setD('anim-u2s', `M ${upstream.l - G} ${hY - 7} L ${store.r + G} ${hY - 7}`);
+
+    const reqX  = upstream.cx - 10;
+    const respX = upstream.cx + 10;
+    const upBot = upstream.b + G;
+    const modTop= model.t - G;
+    setD('arr-req',   `M ${reqX}  ${upBot}  L ${reqX}  ${modTop}`);
+    setD('arr-resp',  `M ${respX} ${modTop} L ${respX} ${upBot}`);
+    setD('anim-req',  `M ${reqX}  ${upBot}  L ${reqX}  ${modTop}`);
+    setD('anim-resp', `M ${respX} ${modTop} L ${respX} ${upBot}`);
+
+    setD('arr-train', `M ${training.r + G} ${training.cy} L ${artifact.l - G} ${artifact.cy}`);
+
+    setD('arr-deploy', `M ${artifact.r + G} ${artifact.cy} L ${model.l - G} ${model.cy}`);
+    const lbl = document.getElementById('lbl-deploy' + s);
+    lbl.setAttribute('x', ((artifact.r + model.l) / 2).toString());
+    lbl.setAttribute('y', (artifact.cy - 7).toString());
+    lbl.textContent = 'deployed';
+
+    /* Feature Compute → Data Store (diagram 1 only) */
+    if (s === '') {
+      const fc = bb('nodeFeatureCompute');
+      // vertical: bottom of Feature Compute → top of Data Store
+      setD('arr-fc2store', `M ${fc.cx} ${fc.b + G} L ${fc.cx} ${store.t - G}`);
+      const lblFc = document.getElementById('lbl-fc2store');
+      const arrowMidY = (fc.b + store.t) / 2;
+      lblFc.setAttribute('x', (fc.cx + 10).toString());
+      lblFc.setAttribute('y', arrowMidY.toString());
+      lblFc.textContent = 'batch';
+    }
+
+    /* Feature Compute → SeqPack Encoding → Data Store (diagram 2 only) */
+    if (s === '2') {
+      const sp = bb('nodeSeqPackEncode');
+      // SeqPack Encoding → Data Store
+      setD('arr-fc2store', `M ${sp.cx} ${sp.b + G} L ${sp.cx} ${store.t - G}`);
+      const lblFc = document.getElementById('lbl-fc2store2');
+      const arrowMidY = (sp.b + store.t) / 2;
+      lblFc.setAttribute('x', (sp.cx + 10).toString());
+      lblFc.setAttribute('y', arrowMidY.toString());
+      lblFc.textContent = 'batch';
+    }
+
+    const pillMidY = (upBot + modTop) / 2;
+    pillReq.style.width  = SZ.pillReq.w + 'px';
+    pillResp.style.width = SZ.pillResp.w + 'px';
+    const prh  = pillReq.getBoundingClientRect().height;
+    const prsh = pillResp.getBoundingClientRect().height;
+    pillReq.style.left  = (reqX - SZ.pillReq.w - 12) + 'px';
+    pillReq.style.top   = (pillMidY - prh  / 2) + 'px';
+    pillResp.style.left = (respX + 12) + 'px';
+    pillResp.style.top  = (pillMidY - prsh / 2) + 'px';
+  }
+
+  function layoutNodes() {
+    place('btnSend',        'btn');
+    place('nodeStore',      'store');
+    place('nodeUpstream',   'upstream');
+    place('nodeModelOuter', 'model');
+    place('nodeTraining',   'training');
+    place('nodeArtifact',   'artifact');
+    place('latencyBadge',   'latency');
+    if (s === '') place('nodeFeatureCompute', 'featureCompute');
+    if (s === '2') {
+      place('nodeFeatureCompute', 'featureCompute');
+      place('nodeSeqPackEncode',  'seqpackEncode');
+    }
+    drawArrows();
+  }
+
+  /* animation */
+  let animState = 'idle';
+
+  function showAnim(id) { document.getElementById(id + s).style.display = ''; }
+  function hideAnim(id) { document.getElementById(id + s).style.display = 'none'; }
+
+  function dot(id) {
+    const el = document.getElementById(id + s);
+    return {
+      show(x, y) { el.setAttribute('cx', x); el.setAttribute('cy', y); el.classList.add('visible'); },
+      hide()     { el.classList.remove('visible'); },
+      moveTo(x1, y1, dur, cb) {
+        const x0 = +el.getAttribute('cx'), y0 = +el.getAttribute('cy');
+        const t0 = performance.now();
+        (function frame(now) {
+          const t = Math.min((now - t0) / dur, 1);
+          const e = t < 0.5 ? 2*t*t : -1+(4-2*t)*t;
+          el.setAttribute('cx', x0 + (x1-x0)*e);
+          el.setAttribute('cy', y0 + (y1-y0)*e);
+          if (t < 1) requestAnimationFrame(frame); else cb();
+        })(t0);
+      },
+    };
+  }
+
+  function runInferenceBar(dur, cb) {
+    statusDetail.textContent = 'inference logic running…';
+    inferenceBar.style.width = '0%';
+    inferenceBar.style.transition = 'none';
+    inferenceWrap.classList.add('visible');
+    inferenceBar.getBoundingClientRect();
+    inferenceBar.style.transition = `width ${dur}ms cubic-bezier(0.4,0,0.2,1)`;
+    inferenceBar.style.width = '100%';
+    setTimeout(cb, dur + 120);
+  }
+
+  function runDecodeBar(dur, cb) {
+    statusDetail.textContent = 'decoding feature sequences…';
+    decodeBar.style.width = '0%';
+    decodeBar.style.transition = 'none';
+    decodeWrap.classList.add('visible');
+    decodeBar.getBoundingClientRect();
+    decodeBar.style.transition = `width ${dur}ms cubic-bezier(0.4,0,0.2,1)`;
+    decodeBar.style.width = '100%';
+    setTimeout(cb, dur + 80);
+  }
+
+  function phase2(upstream, model, G) {
+    btnSend.textContent = 'Request sent…';
+    statusDetail.textContent = 'sending inference request to model endpoint…';
+    const reqX  = upstream.cx - 10;
+    const respX = upstream.cx + 10;
+    const upBot = upstream.b + G;
+    const modTop= model.t - G;
+
+    showAnim('anim-req');
+    const dotReq = dot('dot-req');
+    dotReq.show(reqX, upBot);
+    dotReq.moveTo(reqX, modTop, s === '2' ? 280 : 1300, () => {
+      dotReq.hide();
+      hideAnim('anim-req');
+      const afterDecode = () => runInferenceBar(800, () => {
+        showAnim('anim-resp');
+        const dotResp = dot('dot-resp');
+        dotResp.show(respX, modTop);
+        dotResp.moveTo(respX, upBot, s === '2' ? 240 : 1100, () => {
+          dotResp.hide();
+          hideAnim('anim-resp');
+          onComplete();
+        });
+      });
+      if (s === '2') runDecodeBar(120, afterDecode);
+      else afterDecode();
+    });
+  }
+
+  function animateRequest() {
+    if (animState !== 'idle') return;
+    animState = 'sending';
+    btnSend.classList.add('fired');
+    btnSend.textContent = 'Fetching features…';
+    statusDetail.textContent = 'fetching raw features from data store…';
+
+    const store    = bb('nodeStore');
+    const upstream = bb('nodeUpstream');
+    const model    = bb('nodeModelOuter');
+    const G = 8;
+    const hY = (store.cy + upstream.cy) / 2;
+
+    showAnim('anim-u2s');
+    const dotU2S = dot('dot-u2s');
+    dotU2S.show(upstream.l - G, hY - 7);
+    dotU2S.moveTo(store.r + G, hY - 7, 1100, () => {
+      dotU2S.hide();
+      hideAnim('anim-u2s');
+      setTimeout(() => {
+        showAnim('anim-s2u');
+        const dotS2U = dot('dot-s2u');
+        dotS2U.show(store.r + G, hY + 7);
+        dotS2U.moveTo(upstream.l - G, hY + 7, s === '2' ? 350 : 1000, () => {
+          dotS2U.hide();
+          hideAnim('anim-s2u');
+          phase2(upstream, model, G);
+        });
+      }, 250);
+    });
+  }
+
+  function onComplete() {
+    animState = 'done';
+    const ms = s === '2'
+      ? 25 + Math.floor(Math.random() * 11)   // 25–35 ms, green
+      : 90 + Math.floor(Math.random() * 41);  // 90–130 ms, red
+    latValue.textContent = ms;
+    latValue.style.color = s === '2' ? 'var(--pos)' : 'var(--neg)';
+    latValue.textContent = ms;
+    latBadge.classList.add('visible');
+    tooltipReq.innerHTML  = PAYLOADS[s].req;
+    tooltipResp.innerHTML = PAYLOADS[s].resp;
+    pillReq.classList.add('active');  pillReq.setAttribute('tabindex', '0');
+    pillResp.classList.add('active'); pillResp.setAttribute('tabindex', '0');
+    btnSend.textContent = '✓ Request complete';
+    statusDetail.textContent = `round trip complete · ${ms} ms · hover payloads to inspect`;
+    btnReset.classList.add('visible');
+  }
+
+  function resetDiagram() {
+    animState = 'idle';
+    btnSend.classList.remove('fired');
+    btnSend.innerHTML = 'Send RT<br>Recommendation<br>Request';
+    latBadge.classList.remove('visible');
+    latValue.textContent = '—';
+    pillReq.classList.remove('active');  pillReq.setAttribute('tabindex', '-1');
+    pillResp.classList.remove('active'); pillResp.setAttribute('tabindex', '-1');
+    btnReset.classList.remove('visible');
+    statusDetail.textContent = 'real-time recommendation · request flow animation';
+    ['anim-s2u','anim-u2s','anim-req','anim-resp'].forEach(hideAnim);
+    inferenceWrap.classList.remove('visible');
+    inferenceBar.style.transition = 'none';
+    inferenceBar.style.width = '0%';
+    if (decodeWrap) {
+      decodeWrap.classList.remove('visible');
+      decodeBar.style.transition = 'none';
+      decodeBar.style.width = '0%';
+    }
+  }
+
+  /* init */
+  requestAnimationFrame(() => requestAnimationFrame(layoutNodes));
+  btnSend.addEventListener('click', animateRequest);
+  btnReset.addEventListener('click', resetDiagram);
+  window.addEventListener('resize', layoutNodes);
+}
+
+/* ── boot both diagrams ───────────────────────────────────────────── */
+document.addEventListener('DOMContentLoaded', () => {
+  makeDiagram('');
+  makeDiagram('2');
+});
+</script>
+
+</body>
+</html>
