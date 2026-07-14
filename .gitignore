@@ -1,0 +1,10 @@
+notebooks/
+*.pyc
+__pycache__
+.pytest_cache
+.env
+.venv
+.DS_Store
+.claude
+*.egg-info
+paper/

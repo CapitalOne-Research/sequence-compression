@@ -1,0 +1,451 @@
+/* ═════════════════════════════════════════════════════════════════
+   SCHEMES · per-scheme animations
+   inherits tokens from styles.css (--accent, --ink, --border, etc.)
+   ═════════════════════════════════════════════════════════════════ */
+
+/* index strip of cards linking to each scheme section */
+.sch-index {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 8px;
+  margin-top: 18px;
+}
+.sch-index a {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  color: var(--ink);
+  text-decoration: none;
+  border-bottom: 1px solid var(--border);
+  transition: border-color var(--t-base) var(--ease),
+              transform var(--t-base) var(--ease);
+}
+.sch-index a:hover {
+  border-color: var(--accent);
+  transform: translateY(-1px);
+  color: var(--ink);
+}
+.sch-index .ix-code {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 12px;
+  color: var(--accent);
+  letter-spacing: 0.04em;
+}
+.sch-index .ix-name {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+/* per-scheme section header bits */
+.sch-section .sch-blurb {
+  max-width: 760px;
+  color: var(--ink-soft);
+  margin: 0 0 14px;
+}
+.sch-section .sch-tagline {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 4px 0 0;
+}
+
+/* stage frame */
+.sch-stage {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: 22px 24px 20px;
+  box-shadow: var(--shadow-1);
+  margin-top: 14px;
+}
+.sch-stage-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+  border-bottom: 1px dashed var(--border);
+  padding-bottom: 14px;
+}
+.sch-step-label {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+.sch-step-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.sch-step-name em {
+  color: var(--accent);
+  font-style: italic;
+}
+.sch-step-counter {
+  margin-left: auto;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 12px;
+  color: var(--muted);
+}
+.sch-step-counter b {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.sch-controls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px dashed var(--border);
+}
+.sch-btn {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  padding: 6px 12px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--ink);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  transition: all var(--t-fast) var(--ease);
+}
+.sch-btn:hover { border-color: var(--accent); color: var(--accent); }
+.sch-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.sch-btn.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-dark);
+}
+.sch-btn.primary:hover { background: var(--accent-strong); color: var(--on-dark); }
+.sch-speed {
+  margin-left: auto;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.sch-speed select {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--ink);
+  padding: 3px 6px;
+  border-radius: var(--r-sm);
+}
+
+/* commentary line above canvas */
+.sch-commentary {
+  font-family: 'IBM Plex Serif', serif;
+  font-style: italic;
+  color: var(--ink-soft);
+  min-height: 1.5em;
+  font-size: 14px;
+  margin-bottom: 14px;
+  padding: 8px 12px;
+  background: var(--accent-tint);
+  border-left: 2px solid var(--accent);
+  border-radius: 0 var(--r-sm) var(--r-sm) 0;
+}
+
+/* the animation canvas */
+.sch-canvas {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 13px;
+}
+
+/* horizontal row of cells (values) */
+.sch-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.sch-row-label {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.sch-cells {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.sch-cell {
+  min-width: 44px;
+  padding: 8px 10px;
+  text-align: center;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  transition: all var(--t-slow) var(--ease);
+  position: relative;
+}
+.sch-cell.hl {
+  background: var(--accent-tint);
+  border-color: var(--accent);
+  color: var(--accent-strong);
+  font-weight: 600;
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-2);
+}
+.sch-cell.dim {
+  opacity: 0.35;
+  background: var(--surface-alt);
+}
+.sch-cell.struck {
+  text-decoration: line-through;
+  opacity: 0.45;
+  background: var(--neg-soft);
+  border-color: var(--neg);
+  color: var(--neg);
+}
+.sch-cell.added {
+  background: var(--pos-soft);
+  border-color: var(--pos);
+  color: var(--pos);
+  font-weight: 600;
+  animation: schPop var(--t-slow) var(--ease);
+}
+.sch-cell.sentinel {
+  background: var(--warn-soft);
+  border-color: var(--warn);
+  color: var(--warn);
+  font-weight: 600;
+}
+.sch-cell.dom {
+  background: var(--surface-alt);
+  border-style: dashed;
+  color: var(--muted);
+}
+.sch-cell.byte {
+  font-size: 11px;
+  min-width: 0;
+  padding: 6px 6px;
+  letter-spacing: 0.04em;
+}
+.sch-cell sub {
+  display: block;
+  font-size: 9px;
+  color: var(--muted);
+  margin-top: 2px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+@keyframes schPop {
+  0% { transform: scale(0.6); opacity: 0; }
+  60% { transform: scale(1.08); opacity: 1; }
+  100% { transform: scale(1); }
+}
+
+/* dictionary / aux readout block */
+.sch-aux {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--surface-alt);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--r-md);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 12px;
+  min-height: 2.4em;
+  align-items: center;
+}
+.sch-aux:empty::before {
+  content: 'aux: —';
+  color: var(--soft);
+}
+.sch-aux .kv {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  color: var(--ink-soft);
+  animation: schFadeIn var(--t-slow) var(--ease);
+}
+.sch-aux .kv b {
+  color: var(--accent);
+  font-weight: 600;
+}
+.sch-aux-defs {
+  margin-top: 8px;
+  padding: 10px 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 2px solid var(--accent);
+  border-radius: 0 var(--r-sm) var(--r-sm) 0;
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  column-gap: 14px;
+  row-gap: 4px;
+  font-size: 12px;
+}
+.sch-aux-def {
+  display: contents;
+  font-family: 'IBM Plex Sans', sans-serif;
+}
+.sch-aux-def b {
+  font-family: 'IBM Plex Mono', monospace;
+  color: var(--accent);
+  font-weight: 600;
+  font-size: 11.5px;
+  white-space: nowrap;
+  align-self: baseline;
+}
+.sch-aux-def span {
+  color: var(--ink-soft);
+  line-height: 1.5;
+}
+.sch-aux-def code {
+  font-size: 11px;
+  padding: 0 4px;
+}
+@keyframes schFadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* bit grid for bm / bp / nbp */
+.sch-bits {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 10px;
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+}
+.sch-bit {
+  width: 18px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-family: 'IBM Plex Mono', monospace;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  color: var(--muted);
+  transition: all var(--t-base) var(--ease);
+}
+.sch-bit.one {
+  background: var(--accent);
+  color: var(--on-dark);
+  border-color: var(--accent);
+}
+.sch-bit.zero {
+  background: var(--surface);
+  color: var(--soft);
+}
+.sch-bit.header {
+  background: var(--warn-soft);
+  border-color: var(--warn);
+  color: var(--warn);
+}
+.sch-bit.sep {
+  flex-basis: 100%;
+  height: 0;
+  margin: 4px 0;
+  border-top: 1px dashed var(--border);
+  background: none;
+  border-radius: 0;
+}
+.sch-bit.group-end { margin-right: 6px; }
+
+/* byte-stream visualisation for bp etc. */
+.sch-bytes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 10px;
+  background: var(--ink);
+  border-radius: var(--r-md);
+  color: var(--on-dark);
+}
+.sch-byte {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  padding: 5px 7px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 3px;
+  letter-spacing: 0.04em;
+}
+.sch-byte.header {
+  background: rgba(247, 232, 203, 0.18);
+  border-color: var(--warn);
+  color: var(--warn-soft);
+}
+.sch-byte.b64 {
+  font-weight: 600;
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-dark);
+}
+
+/* size meter */
+.sch-meter {
+  display: flex;
+  gap: 18px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+.sch-meter b { color: var(--ink); font-weight: 600; }
+.sch-meter .saved { color: var(--pos); }
+
+/* connectors between rows: subtle vertical arrow */
+.sch-arrow {
+  text-align: center;
+  color: var(--soft);
+  font-size: 14px;
+  line-height: 1;
+  margin: -6px 0 -6px;
+  user-select: none;
+}
+
+/* run-group decoration for rle */
+.sch-cell.run {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 2px var(--accent-soft);
+}
+.sch-cell.run-pair {
+  background: var(--accent-tint);
+}
+
+/* dim helper for visualizing FOR subtraction */
+.sch-cell.shifted::after {
+  content: attr(data-orig);
+  position: absolute;
+  top: -14px;
+  left: 0;
+  right: 0;
+  font-size: 9px;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+}

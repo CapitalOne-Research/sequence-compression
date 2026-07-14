@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sequence-compression"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+    "numpy>=1.26.0",
+    "pandas>=2.2.0",
+    "pyarrow>=17.0.0",
+    "scipy>=1.11.0",
+]
+
+[project.optional-dependencies]
+spark = ["pyspark>=3.5.0"]
+web = ["tornado>=6.4"]
+dev = ["pytest>=8.0", "plotly>=5.0"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["c1*"]

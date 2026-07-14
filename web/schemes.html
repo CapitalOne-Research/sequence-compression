@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Compression Playground · Schemes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Serif:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="schemes.css">
+</head>
+<body>
+
+<div class="grain" aria-hidden="true"></div>
+
+<!-- ─────────────────  MASTHEAD  ───────────────── -->
+<header class="masthead">
+  <h1 class="title">
+    <span class="title-roman">Compression</span>
+    <span class="title-italic">Playground</span>
+  </h1>
+
+  <p class="masthead-tagline">
+    Eight encoding schemes for recommender feature sequences, animated step by
+    step on canonical samples. Press <em>play</em> to watch each transformation
+    unfold — categorical dictionaries for channel IDs, run collapses for sparse
+    interactions, frame-of-reference shifts for timestamps, bit packing, and
+    TurboQuant vector quantization.
+  </p>
+
+  <nav class="masthead-nav">
+    <a href="/" class="nav-link">
+      <span class="nav-arrow">←</span> encode a file
+    </a>
+    <a href="/inspector.html" class="nav-link">
+      <span class="nav-glyph">✦</span> inspector
+    </a>
+    <span class="nav-current">
+      <span class="nav-glyph">✦</span> schemes
+    </span>
+    <a href="/recsys-use-case.html" class="nav-link">
+      <span class="nav-glyph">✦</span> recsys example <span class="nav-arrow">→</span>
+    </a>
+  </nav>
+
+  <div class="hot-rule"></div>
+</header>
+
+
+<!-- ─────────────────  INDEX  ───────────────── -->
+<section class="section">
+  <div class="section-num">§ 00.</div>
+  <h2 class="section-title">Ten <em>Schemes</em></h2>
+  <div class="section-body">
+    <p class="lede">
+      Schemes are short <em>(encode, decode)</em> pairs composed left-to-right
+      in feature pipelines &mdash; usually <span class="hot-italic">transform &rarr; reduce
+      &rarr; pack</span>. Recommender payloads tend to be sparse, repetitive, or
+      monotone, which is exactly what these schemes exploit. Pick one below to
+      scroll to its animation, or scroll naturally through all ten.
+    </p>
+    <div class="sch-index" id="schIndex"></div>
+  </div>
+</section>
+
+
+<!-- ─────────────────  THE TEN SCHEMES  ───────────────── -->
+<div id="schemeSections"></div>
+
+
+<!-- ─────────────────  STATUS BAR  ───────────────── -->
+<footer class="status-bar">
+  <span class="status-dot" id="statusDot"></span>
+  <span id="statusLabel">SCHEMES</span>
+  <span class="status-sep">━━</span>
+  <span id="statusDetail">animated reference · recommender feature samples</span>
+  <span class="status-spacer"></span>
+  <span class="status-meta">compression playground · schemes</span>
+</footer>
+
+<script src="schemes.js"></script>
+
+</body>
+</html>

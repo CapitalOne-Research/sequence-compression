@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Compression Playground — recommender feature compression</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Serif:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!-- paper grain overlay -->
+<div class="grain" aria-hidden="true"></div>
+
+<!-- ─────────────────  MASTHEAD  ───────────────── -->
+<header class="masthead">
+  <h1 class="title">
+    <span class="title-roman">Compression</span>
+    <span class="title-italic">Playground</span>
+  </h1>
+
+  <p class="masthead-tagline">
+    An interactive instrument for compressing recommender feature payloads — drop a
+    parquet or csv file containing user or item feature sequences and route each
+    column through a pipeline of your choosing.
+  </p>
+
+  <nav class="masthead-nav">
+    <span class="nav-current">
+      <span class="nav-glyph">✦</span> encoder
+    </span>
+    <a href="/inspector.html" class="nav-link">
+      <span class="nav-glyph">✦</span> inspector <span class="nav-arrow">→</span>
+    </a>
+    <a href="/schemes.html" class="nav-link">
+      <span class="nav-glyph">✦</span> schemes <span class="nav-arrow">→</span>
+    </a>
+    <a href="/recsys-use-case.html" class="nav-link">
+      <span class="nav-glyph">✦</span> recsys example <span class="nav-arrow">→</span>
+    </a>
+  </nav>
+
+  <div class="hot-rule"></div>
+</header>
+
+
+<!-- ─────────────────  §01 INTAKE  ───────────────── -->
+<section id="section-intake" class="section">
+  <div class="section-num">§ 01.</div>
+  <h2 class="section-title">Intake</h2>
+
+  <div class="section-body">
+    <div class="intake-grid">
+
+      <div class="intake-copy">
+        <p class="lede">
+          Drop a feature payload file. The playground profiles each column,
+          infers the statistical shape of the sequence (categorical channel
+          IDs, sparse interaction counts, dense embeddings, event timestamps, etc.),
+          and recommends a compression pipeline suited to that shape.
+        </p>
+        <ul class="legend">
+          <li><span class="key">.csv</span> via pandas</li>
+          <li><span class="key">.parquet</span> via pyarrow</li>
+          <li><span class="key">utf-8</span> compact json sizing</li>
+        </ul>
+        <p class="footnote">
+          <span class="ref">¹</span> Encoding is only retained when the encoded
+          payload is strictly smaller than the original — a behaviour inherited
+          from <code>encode_feature_payload</code> and surfaced here verbatim.
+        </p>
+      </div>
+
+      <label class="intake-drop" id="dropZone" for="fileInput">
+        <span class="drop-corner tl"></span>
+        <span class="drop-corner tr"></span>
+        <span class="drop-corner bl"></span>
+        <span class="drop-corner br"></span>
+
+        <div class="drop-content">
+          <div class="drop-glyph">⇣</div>
+          <div class="drop-label">DROP&nbsp;TARGET</div>
+          <div class="drop-divider"></div>
+          <div class="drop-sub">drag · or · click to select</div>
+          <div class="drop-formats">
+            <span>.csv</span><span class="dot">·</span><span>.parquet</span><span class="dot">·</span><span>max 10 MB</span>
+          </div>
+          <div class="drop-sample">
+            <span class="drop-sample-or">or</span>
+            <button type="button" id="loadSampleBtn" class="btn-sample">
+              try sample dataset <span class="btn-sample-name">kuairand_demo.parquet</span>
+            </button>
+          </div>
+        </div>
+        <input type="file" id="fileInput" accept=".csv,.parquet" hidden>
+      </label>
+
+    </div>
+  </div>
+</section>
+
+
+<!-- ─────────────────  §02 INSPECTION  ───────────────── -->
+<section id="section-schema" class="section hidden">
+  <div class="section-num">§ 02.</div>
+  <h2 class="section-title">Schema <em>Inspection</em></h2>
+
+  <div class="section-body">
+
+    <div class="schema-stats">
+      <div class="stat">
+        <div class="stat-label">Payload file</div>
+        <div class="stat-value mono" id="filename">—</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Rows</div>
+        <div class="stat-value" id="rowCount">—</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Columns</div>
+        <div class="stat-value" id="colCount">—</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Original size</div>
+        <div class="stat-value" id="origSize">—</div>
+      </div>
+    </div>
+
+    <div class="schema-table-scroll">
+      <table class="schema-table" id="schemaTable">
+        <thead>
+          <tr>
+            <th>№</th>
+            <th>Column</th>
+            <th>Inferred type</th>
+            <th>Avg seq length</th>
+            <th>Sample values</th>
+            <th class="ta-r">Bytes</th>
+          </tr>
+        </thead>
+        <tbody id="schemaBody"></tbody>
+      </table>
+    </div>
+
+  </div>
+</section>
+
+
+<!-- ─────────────────  §03 PIPELINE COMPOSITION  ───────────────── -->
+<section id="section-pipeline" class="section hidden">
+  <div class="section-num">§ 03.</div>
+  <h2 class="section-title">Pipeline <em>Composition</em></h2>
+
+  <div class="section-body">
+
+    <p class="pipeline-help">
+      Compose an encoding pipeline per feature column. Steps apply
+      <em>left&#8209;to&#8209;right</em>; the decoder reverses them. Most
+      recommender feature pipelines follow the rhythm of
+      <span class="hot-italic">transform → reduce → pack</span>
+      — e.g. <code>cat_rle_bp</code> for sparse channel IDs or
+      <code>del_bp</code> for monotone event timestamps.
+    </p>
+
+    <div class="encode-actions">
+      <button id="encodeBtn" class="btn-primary">
+        Encode <span class="btn-arrow">⇢</span>
+      </button>
+      <button id="autoAllBtn" class="btn-secondary btn-auto-all">
+        <span class="auto-glyph">✦</span> auto all
+      </button>
+      <button id="autoBtn" class="btn-secondary">
+        ✦ recommend all
+      </button>
+      <button id="clearBtn" class="btn-secondary">
+        clear all
+      </button>
+      <label class="lossy-toggle" title="When enabled, auto may pick lossy schemes (quant, tbqm, tbqp)">
+        <input type="checkbox" id="lossyToggle" checked>
+        allow lossy <span class="lossy-toggle-hint">(auto)</span>
+      </label>
+      <span class="action-spacer"></span>
+      <span class="action-hint">click <code>+</code> to add a step · click a chip <code>×</code> to remove</span>
+    </div>
+
+    <div id="pipelineList" class="pipeline-list"></div>
+
+    <!-- inline encode progress — shown during /api/encode call -->
+    <div id="encodeLoader" class="encode-loading-inline hidden">
+      <div class="encode-loading-label">encode_feature_df</div>
+      <div class="encode-loading-inline-right">
+        <div class="encode-loading-track">
+          <div class="encode-loading-fill indeterminate" id="encodeLoadFill"></div>
+        </div>
+        <div class="encode-loading-detail">
+          <span id="encodeLoadStage">compressing…</span>
+          <span id="encodeLoadSub"></span>
+          <span class="encode-loading-elapsed" id="encodeLoadElapsed">0.0s</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+
+<!-- ─────────────────  §04 ENCODED OUTPUT  ───────────────── -->
+<section id="section-output" class="section hidden">
+  <div class="section-num">§ 04.</div>
+  <h2 class="section-title">Encoded <em>Output</em></h2>
+
+  <div class="section-body">
+
+    <div class="output-summary">
+      <div class="out-block">
+        <div class="out-label">Rows encoded</div>
+        <div class="out-value" id="outRows">—</div>
+        <div class="out-sub mono" id="outRowsSub">across <span id="outColCount">—</span> feature columns</div>
+      </div>
+      <div class="out-block">
+        <div class="out-label">Original</div>
+        <div class="out-value" id="outOrig">—</div>
+        <div class="out-sub mono" id="outOrigBytes">— B · entry <code class="wire-shape">[value]</code></div>
+      </div>
+      <div class="out-block">
+        <div class="out-label">Encoded</div>
+        <div class="out-value hot" id="outEnc">—</div>
+        <div class="out-sub mono" id="outEncBytes">— B · entry <code class="wire-shape hot">[value, scheme, aux]</code></div>
+      </div>
+      <div class="out-block">
+        <div class="out-label">Saved</div>
+        <div class="out-value hot" id="outSaved">—</div>
+        <div class="out-sub mono" id="outSavedBytes">— B · <span id="outRatio">—</span></div>
+      </div>
+    </div>
+
+    <div class="output-chart">
+      <div class="chart-header">
+        <span class="chart-title">Per-feature compression</span>
+        <span class="chart-legend">
+          <span class="legend-swatch dark"></span> original
+          &nbsp;&nbsp;
+          <span class="legend-swatch hot"></span> encoded
+        </span>
+      </div>
+      <div class="output-bars" id="outputBars"></div>
+    </div>
+
+    <div class="output-wire">
+      <div class="wire-header">
+        <span class="wire-title">Encoded entries · per-feature payload <span class="wire-note">list columns shown for row&nbsp;<span class="hot">1</span></span></span>
+        <button id="copyWire" class="btn-tiny">copy</button>
+      </div>
+      <pre class="wire-pre" id="wireOutput"></pre>
+    </div>
+
+  </div>
+</section>
+
+
+<!-- ─────────────────  §05 SCHEME DISTRIBUTION  ───────────────── -->
+<section id="section-distribution" class="section hidden">
+  <div class="section-num">§ 05.</div>
+  <h2 class="section-title">Scheme <em>Distribution</em></h2>
+
+  <div class="section-body">
+
+    <p class="dist-help">
+      Pipelines chosen <em>per row</em> across the encoded payload. Select a
+      feature column to see its pipeline distribution, or view <span class="hot-italic">All
+      columns</span> for the population-level histogram across every row of
+      every feature.
+    </p>
+
+    <div class="dist-layout">
+      <aside class="dist-col-panel">
+        <div class="dist-search">
+          <input type="text" id="distSearch" placeholder="filter features…" autocomplete="off">
+        </div>
+        <div class="dist-col-list" id="distColList"></div>
+      </aside>
+
+      <div class="dist-histogram">
+        <div class="dist-hist-header">
+          <div>
+            <div class="dist-hist-eyebrow" id="distEyebrow">SELECTION</div>
+            <div class="dist-hist-title" id="distTitle">—</div>
+          </div>
+          <div class="dist-hist-meta" id="distMeta">—</div>
+        </div>
+        <div class="dist-bars" id="distBars"></div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+
+<!-- ─────────────────  STATUS BAR  ───────────────── -->
+<footer class="status-bar">
+  <span class="status-dot" id="statusDot"></span>
+  <span id="statusLabel">IDLE</span>
+  <span class="status-sep">━━</span>
+  <span id="statusDetail">awaiting feature payload</span>
+  <span class="status-spacer"></span>
+  <span class="status-meta">compression playground · recommender features · v0.1</span>
+</footer>
+
+<!-- third-party libs (loaded by browser) -->
+<script src="app.js"></script>
+
+</body>
+</html>
