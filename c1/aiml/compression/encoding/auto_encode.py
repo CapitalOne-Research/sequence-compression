@@ -18,12 +18,12 @@ _AUTO_TYPE_TRANSITIONS: dict[str, dict[str, str]] = {
     "bp":    {"binary": "_terminal", "int": "_terminal"},
     "nbp":   {"binary": "_terminal", "int": "_terminal"},
     "cat":   {"string": "int"},
-    "del":   {"binary": "int", "int": "int", "float": "float"},
-    "quant": {"binary": "int", "int": "int", "float": "int"},
-    "rle":   {"binary": "int", "int": "int", "float": "float", "string": "_terminal"},
-    "stl":   {"binary": "binary", "int": "int", "float": "float"},
-    "tbqm":  {"float": "_terminal"},
-    "tbqp":  {"float": "_terminal"},
+    "del":   {"int": "int"},
+    "quant": {"float": "int"},
+    "rle":   {"binary": "int", "int": "int", "string": "_terminal"},
+    "stl":   {"int": "int"},
+    "tbqm":  {"float": "int"},
+    "tbqp":  {"float": "int"},
 }
 
 # Reverse index: input_type -> tuple of steps that accept it. Computed once.
@@ -35,7 +35,7 @@ _AUTO_VALID_FOR_TYPE = {t: tuple(steps) for t, steps in _AUTO_VALID_FOR_TYPE.ite
 
 
 _AUTO_ROOT_SEEDS: dict[str, tuple[str, ...]] = {
-    "binary":   ("bm", "nbp"),
+    "binary":   ("bm", "nbp", "rle"),
     "int":      ("bp", "nbp", "rle", "del", "stl"),
     "float":    ("quant", "tbqm", "tbqp"),
     "string":   ("cat", "rle"),

@@ -445,8 +445,10 @@ async function runEncode() {
 
     const saved = data.total_orig - data.total_enc;
     const savedPct = data.total_orig === 0 ? 0 : (saved / data.total_orig) * 100;
-    updateStatus('ENCODED',
-      `−${formatBytes(saved)} · ${savedPct.toFixed(1)}% reduction · server ${data.elapsed_ms.toFixed(0)}ms`);
+    const savedMsg = savedPct >= 0
+      ? `${savedPct.toFixed(1)}% space saved · server ${data.elapsed_ms.toFixed(0)}ms`
+      : `${Math.abs(savedPct).toFixed(1)}% space added · server ${data.elapsed_ms.toFixed(0)}ms`;
+    updateStatus('ENCODED', savedMsg);
     document.getElementById('section-output').scrollIntoView({ behavior: 'smooth', block: 'start' });
   } catch (err) {
     hideEncodeLoader(loader);
@@ -489,8 +491,19 @@ function renderOutput(roundTripMs) {
   setText('outEnc',         formatBytes(total_enc));
   setText('outEncBytes',    `${total_enc.toLocaleString()} bytes · server ${elapsed_ms.toFixed(0)}ms · rt ${roundTripMs.toFixed(0)}ms`);
   setText('outRatio',       ratio.toFixed(3) + '×');
-  setText('outSaved',       (saved >= 0 ? '−' : '+') + Math.abs(saved).toFixed(1) + '%');
-  setText('outSavedBytes',  `${savedBytes.toLocaleString()} bytes · ${ratio.toFixed(3)}×`);
+  const savedEl = document.getElementById('outSaved');
+  const savedLabelEl = savedEl.closest('.out-block')?.querySelector('.out-label');
+  savedEl.className = savedEl.className.replace(/\bsaved-\w+/g, '').trim();
+  if (saved >= 0) {
+    savedEl.textContent = Math.abs(saved).toFixed(1) + '%';
+    savedEl.classList.add('saved-pos');
+    if (savedLabelEl) savedLabelEl.textContent = 'REDUCED';
+  } else {
+    savedEl.textContent = Math.abs(saved).toFixed(1) + '%';
+    savedEl.classList.add('saved-neg');
+    if (savedLabelEl) savedLabelEl.textContent = 'INCREASED';
+  }
+  setText('outSavedBytes',  `${savedBytes.toLocaleString()} bytes`);
 
   const sorted = [...perColumn].sort((a, b) => (b.orig_size - b.enc_size) - (a.orig_size - a.enc_size));
   const maxSize = Math.max(...sorted.map(c => c.orig_size), 1);
@@ -500,7 +513,7 @@ function renderOutput(roundTripMs) {
   sorted.forEach((col, i) => {
     const r = col.enc_size / Math.max(1, col.orig_size);
     const savedPct = (1 - r) * 100;
-    const cls = col.scheme ? (savedPct > 0.5 ? 'positive' : 'zero') : 'zero';
+    const cls = col.scheme ? (savedPct > 0.5 ? 'positive' : savedPct < -0.5 ? 'negative' : 'zero') : 'zero';
     const isAutoPicked = col.requested === 'auto' && !!col.scheme;
 
     const bar = document.createElement('div');
@@ -511,7 +524,7 @@ function renderOutput(roundTripMs) {
         <div class="bar-orig" style="width: ${(col.orig_size / maxSize) * 100}%"></div>
         <div class="bar-enc" style="width: 0%"></div>
       </div>
-      <div class="bar-savings ${cls}">${col.scheme ? (savedPct > 0 ? '−' : '+') + Math.abs(savedPct).toFixed(1) + '%' : '—'}</div>
+      <div class="bar-savings ${cls}">${col.scheme ? Math.abs(savedPct).toFixed(1) + '% ' + (savedPct >= 0 ? 'saved' : 'added') : '—'}</div>
     `;
     bars.appendChild(bar);
 
@@ -638,7 +651,7 @@ function renderDistHistogram() {
     titleText = col.name;
     const ratio = col.enc_size / Math.max(1, col.orig_size);
     const saved = (1 - ratio) * 100;
-    metaText = `${col.row_count.toLocaleString()} rows · ${formatBytes(col.orig_size)} → ${formatBytes(col.enc_size)} (${saved >= 0 ? '−' : '+'}${Math.abs(saved).toFixed(1)}%)`;
+    metaText = `${col.row_count.toLocaleString()} rows · ${formatBytes(col.orig_size)} → ${formatBytes(col.enc_size)} (${Math.abs(saved).toFixed(1)}% ${saved >= 0 ? 'saved' : 'added'})`;
   }
 
   eyebrow.textContent = eyebrowText;
@@ -721,6 +734,57 @@ function renderWireTriplePanel(col) {
 
   const totalLen = value ? value.length : 0;
 
+  // Payload comparison — uncompressed vs compressed for this row
+  const uncompressedCell = col.wire_orig_cell;
+  const uncompressedBytes = col.wire_orig_bytes || 0;
+  const savedBytes = uncompressedBytes - totalLen;
+  const savedPct = uncompressedBytes > 0 ? (savedBytes / uncompressedBytes) * 100 : 0;
+  const savedClass = savedBytes > 0 ? 'shrunk' : (savedBytes < 0 ? 'grew' : '');
+  const savedLabel = savedBytes === 0
+    ? '±0 B'
+    : `${savedBytes > 0 ? '−' : '+'}${Math.abs(savedBytes)} B · ${(savedPct >= 0 ? '−' : '+') + Math.abs(savedPct).toFixed(1)}%`;
+
+  const uncompressedPreview = uncompressedCell == null
+    ? '<em class="muted">—</em>'
+    : `<pre class="wire-triple-pre">${escapeHtml(formatTripleValue(uncompressedCell))}</pre>`;
+
+  const compressedTriple = auxEntries.length > 0 ? [valueOnly, scheme, aux] : [valueOnly, scheme];
+  const compressedPreview = valueOnly === null
+    ? '<em class="muted">—</em>'
+    : `<pre class="wire-triple-pre">${escapeHtml(formatTripleValue(compressedTriple))}</pre>`;
+
+  const payloadCompare = (uncompressedBytes > 0 && totalLen > 0) ? `
+    <div class="pg-payload-compare">
+      <div class="pg-payload-compare-head">
+        <span class="pg-payload-compare-title">PAYLOAD COMPARISON</span>
+        <span class="pg-payload-compare-meta muted">row 1 · as stored by <code>encode_feature_payload</code></span>
+      </div>
+      <div class="pg-payload-compare-grid">
+        <div class="pg-payload-compare-cell pg-payload-uncompressed">
+          <div class="pg-payload-cell-label">
+            uncompressed
+            <span class="pg-payload-cell-bytes">${uncompressedBytes} B</span>
+          </div>
+          <div class="pg-payload-cell-note muted">json.dumps([values])</div>
+          ${uncompressedPreview}
+        </div>
+        <div class="pg-payload-compare-arrow">→</div>
+        <div class="pg-payload-compare-cell pg-payload-compressed">
+          <div class="pg-payload-cell-label">
+            compressed
+            <span class="pg-payload-cell-bytes hot">${totalLen} B</span>
+          </div>
+          <div class="pg-payload-cell-note muted">json.dumps([value, scheme, aux])</div>
+          ${compressedPreview}
+        </div>
+        <div class="pg-payload-compare-savings ${savedClass}">
+          <div class="pg-payload-savings-num">${savedLabel}</div>
+          <div class="pg-payload-savings-sub muted">bytes saved</div>
+        </div>
+      </div>
+    </div>
+  ` : '';
+
   return `
     <div class="wire-triple">
       <div class="wire-triple-head">
@@ -742,6 +806,7 @@ function renderWireTriplePanel(col) {
           ${auxPretty}
         </div>
       </div>
+      ${payloadCompare}
     </div>
   `;
 }
@@ -823,10 +888,6 @@ function setupButtons() {
     e.preventDefault();   // don't let the label's for= open the file picker
     e.stopPropagation();
     loadDefaultDataset();
-  });
-  document.getElementById('autoBtn').addEventListener('click', () => {
-    autoPickAll();
-    toast('recommendations applied');
   });
   document.getElementById('autoAllBtn').addEventListener('click', () => {
     state.columns.forEach(col => { state.pipelines[col.name] = 'auto'; });

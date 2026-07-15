@@ -350,6 +350,7 @@ function renderSteps(data) {
   // final wire-format triple — what `encode_feature_payload` would store
   if (data.steps.length > 1 && data.resolved_pipeline) {
     const lastStep = data.steps[data.steps.length - 1];
+    const firstStep = data.steps[0];
     const finalArrow = document.createElement('div');
     finalArrow.className = 'pg-step-arrow';
     finalArrow.style.animationDelay = `${data.steps.length * 80 + 40}ms`;
@@ -359,12 +360,12 @@ function renderSteps(data) {
     const finalCard = document.createElement('article');
     finalCard.className = 'pg-step pg-final-triple';
     finalCard.style.animationDelay = `${data.steps.length * 80 + 80}ms`;
-    finalCard.innerHTML = renderFinalTriple(lastStep, data);
+    finalCard.innerHTML = renderFinalTriple(lastStep, firstStep, data);
     stepsEl.appendChild(finalCard);
   }
 }
 
-function renderFinalTriple(lastStep, data) {
+function renderFinalTriple(lastStep, firstStep, data) {
   const value = lastStep.output;
   const scheme = data.resolved_pipeline;
   const aux = lastStep.cumulative_aux || {};
@@ -378,6 +379,13 @@ function renderFinalTriple(lastStep, data) {
   // brackets + commas overhead
   const totalBytes = lastStep.byte_size;
   const overhead = totalBytes - valueBytes - schemeBytes - auxBytes;
+
+  // Uncompressed payload: encode_feature_payload would store [values] with no scheme/aux
+  const uncompressedValues = firstStep.output;
+  const uncompressedBytes = firstStep.byte_size;
+  const savedBytes = uncompressedBytes - totalBytes;
+  const savedPct = uncompressedBytes > 0 ? (savedBytes / uncompressedBytes) * 100 : 0;
+  const uncompressedPreview = `<pre class="wire-triple-pre">${escapeHtml(formatTripleValue(uncompressedValues))}</pre>`;
 
   const valuePreview = `<pre class="wire-triple-pre">${escapeHtml(formatTripleValue(value))}</pre>`;
   const auxPretty = auxEntries.length === 0
@@ -409,6 +417,11 @@ function renderFinalTriple(lastStep, data) {
     const pct = (s.bytes / segMax) * 100;
     return `<div class="pg-byte-bar-seg ${s.cls}" style="flex: ${Math.max(0.5, pct).toFixed(2)};" title="${s.label}: ${s.bytes} B (${pct.toFixed(1)}%)"></div>`;
   }).join('');
+
+  const savedClass = savedBytes > 0 ? 'shrunk' : (savedBytes < 0 ? 'grew' : '');
+  const savedLabel = savedBytes === 0
+    ? '±0 B'
+    : `${savedBytes > 0 ? '−' : '+'}${Math.abs(savedBytes)} B · ${(savedPct >= 0 ? '−' : '+') + Math.abs(savedPct).toFixed(1)}%`;
 
   return `
     <header class="pg-step-head">
@@ -451,8 +464,45 @@ function renderFinalTriple(lastStep, data) {
           ${auxPretty}
         </div>
       </div>
+
+      <div class="pg-payload-compare">
+        <div class="pg-payload-compare-head">
+          <span class="pg-payload-compare-title">PAYLOAD COMPARISON</span>
+          <span class="pg-payload-compare-meta muted">as stored by <code>encode_feature_payload</code></span>
+        </div>
+        <div class="pg-payload-compare-grid">
+          <div class="pg-payload-compare-cell pg-payload-uncompressed">
+            <div class="pg-payload-cell-label">
+              uncompressed
+              <span class="pg-payload-cell-bytes">${uncompressedBytes} B</span>
+            </div>
+            <div class="pg-payload-cell-note muted">json.dumps([values])</div>
+            ${uncompressedPreview}
+          </div>
+          <div class="pg-payload-compare-arrow">→</div>
+          <div class="pg-payload-compare-cell pg-payload-compressed">
+            <div class="pg-payload-cell-label">
+              compressed
+              <span class="pg-payload-cell-bytes hot">${totalBytes} B</span>
+            </div>
+            <div class="pg-payload-cell-note muted">json.dumps([value, scheme, aux])</div>
+            <pre class="wire-triple-pre">${escapeHtml(formatCompressedTriple(value, scheme, aux))}</pre>
+          </div>
+          <div class="pg-payload-compare-savings ${savedClass}">
+            <div class="pg-payload-savings-num">${savedLabel}</div>
+            <div class="pg-payload-savings-sub muted">bytes saved</div>
+          </div>
+        </div>
+      </div>
     </div>
   `;
+}
+
+function formatCompressedTriple(value, scheme, aux) {
+  const triple = Object.keys(aux).length > 0 ? [value, scheme, aux] : [value, scheme];
+  const json = JSON.stringify(triple);
+  if (json.length <= 200) return json;
+  return json.slice(0, 200) + '…';
 }
 
 function compactJsonSize(value) {

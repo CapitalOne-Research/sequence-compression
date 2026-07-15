@@ -489,6 +489,22 @@ class EncodeHandler(_JsonHandler):
                 except (json.JSONDecodeError, ValueError):
                     pass
 
+            # Original (uncompressed) row-1 entry: the cell value as it would
+            # be stored without any encoding — [cell] for a list cell or [[v]]
+            # for a scalar. This is what encode_feature_payload emits when the
+            # encoded form is no smaller than the original.
+            wire_orig_cell = None
+            wire_orig_bytes = 0
+            if len(df) > 0:
+                raw_cell = df[col_name].iloc[0]
+                if isinstance(raw_cell, list):
+                    wire_orig_cell = raw_cell
+                elif raw_cell is not None and not (isinstance(raw_cell, float) and pd.isna(raw_cell)):
+                    wire_orig_cell = [raw_cell]
+                else:
+                    wire_orig_cell = []
+                wire_orig_bytes = get_json_byte_size([wire_orig_cell])
+
             requested = schema.get(col_name, "")
             if isinstance(requested, list):
                 requested = "|".join(requested)
@@ -508,6 +524,8 @@ class EncodeHandler(_JsonHandler):
                 "wire_scheme": wire_scheme,
                 "wire_aux": wire_aux,
                 "wire_aux_keys": list(wire_aux.keys()) if wire_aux else [],
+                "wire_orig_cell": wire_orig_cell,
+                "wire_orig_bytes": wire_orig_bytes,
             })
 
         self.finish(json.dumps({

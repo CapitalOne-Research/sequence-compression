@@ -91,12 +91,13 @@ function renderFrame(frame) {
   const parts = [];
   parts.push(`<div class="sch-commentary">${frame.commentary || ''}</div>`);
   const canvas = [];
-  (frame.rows || []).forEach((row, i) => {
-    if (i > 0) canvas.push(`<div class="sch-arrow">↓</div>`);
+  const connect = () => { if (canvas.length) canvas.push(`<div class="sch-arrow">↓</div>`); };
+  (frame.rows || []).forEach((row) => {
+    connect();
     canvas.push(rowHTML(row));
   });
-  if (frame.bits)  { canvas.push(`<div class="sch-arrow">↓</div>`); canvas.push(bitsHTML(frame.bits)); }
-  if (frame.bytes) { canvas.push(`<div class="sch-arrow">↓</div>`); canvas.push(bytesHTML(frame.bytes)); }
+  if (frame.bits)  { connect(); canvas.push(bitsHTML(frame.bits)); }
+  if (frame.bytes) { connect(); canvas.push(bytesHTML(frame.bytes)); }
   parts.push(`<div class="sch-canvas">${canvas.join('')}</div>`);
   parts.push(auxHTML(frame.aux));
   parts.push(meterHTML(frame.meter));
@@ -153,7 +154,33 @@ const SCHEMES = [];
     }
   ];
 
+  const itos = { 0: 'WEB', 1: 'MOBILE', 2: 'TABLET' };
+  const decodeFrames = [
+    {
+      commentary: 'Decode starts from the integer ids plus the stored <code>stoi</code> dictionary.',
+      rows: [mkRow('encoded', encoded.map(String))],
+      aux: [['stoi', '{WEB:0, MOBILE:1, TABLET:2}', 'the dictionary saved at encode time &mdash; everything the decoder needs to invert the mapping.']]
+    },
+    {
+      commentary: 'Flip the dictionary to build <em>itos</em>: id &rarr; label.',
+      rows: [mkRow('encoded', encoded.map(String))],
+      aux: [
+        ['itos.0', itos[0], 'inverse of <code>stoi</code>, built once by swapping keys and values.'],
+        ['itos.1', itos[1], 'id 1 maps back to MOBILE.'],
+        ['itos.2', itos[2], 'id 2 maps back to TABLET.']
+      ]
+    },
+    {
+      commentary: 'Substitute each id with its label. The original strings return exactly &mdash; <code>cat</code> is lossless.',
+      rows: [
+        mkRow('encoded', encoded.map(String), 'dim'),
+        mkRow('decoded', encoded.map(v => itos[v]), 'added')
+      ]
+    }
+  ];
+
   SCHEMES.push({
+    decodeFrames,
     code: 'cat',
     name: 'Categorical',
     tagline: 'strings → ints (dictionary encoding)',
@@ -205,7 +232,28 @@ const SCHEMES = [];
     }
   ];
 
+  const recon = q.map(v => +(v * scale + lo).toFixed(2));
+  const decodeFrames = [
+    {
+      commentary: 'Decode reads the quantized ints plus the affine parameters.',
+      rows: [mkRow('q (int)', q.map(String))],
+      aux: [
+        ['q_scale', scale.toFixed(4), 'step size to multiply back.'],
+        ['min',     lo.toFixed(2),    'lower edge added after scaling to undo the shift.']
+      ]
+    },
+    {
+      commentary: `Reconstruct with <code>x &asymp; q &middot; scale + min</code>. Quantization is <em>lossy</em> &mdash; each value lands within &frac12;&middot;scale of the original.`,
+      rows: [
+        mkRow('q (int)',   q.map(String), 'dim'),
+        mkRow('x̃ (float)', recon.map(v => v.toFixed(2)), 'added'),
+        mkRow('original',  input.map(v => v.toFixed(2)), 'dim')
+      ]
+    }
+  ];
+
   SCHEMES.push({
+    decodeFrames,
     code: 'quant',
     name: 'Quantization',
     tagline: 'floats → small ints (lossy)',
@@ -241,7 +289,32 @@ const SCHEMES = [];
     }
   ];
 
+  const recon = [v0];
+  deltas.forEach(d => recon.push(recon[recon.length - 1] + d));
+  const decodeFrames = [
+    {
+      commentary: 'Decode starts from <em>v₀</em> and the delta stream.',
+      rows: [mkRow('deltas (Δ)', deltas.map(d => (d >= 0 ? '+' : '') + d))],
+      aux: [['v0', String(v0), 'the saved starting value &mdash; the anchor for the running sum.']]
+    },
+    {
+      commentary: 'Seed the output with <em>v₀</em>, then walk left-to-right, adding each delta to the previous result.',
+      rows: [
+        mkRow('deltas (Δ)',  deltas.map(d => (d >= 0 ? '+' : '') + d), 'dim'),
+        mkRow('running sum', recon.map(String), (v, i) => i === 0 ? 'hl' : 'added')
+      ]
+    },
+    {
+      commentary: 'The prefix sum <code>xᵢ = v0 + Σ Δ</code> restores the absolute sequence exactly &mdash; <code>del</code> is lossless.',
+      rows: [
+        mkRow('deltas (Δ)', deltas.map(d => (d >= 0 ? '+' : '') + d), 'dim'),
+        mkRow('decoded',    recon.map(String), 'added')
+      ]
+    }
+  ];
+
   SCHEMES.push({
+    decodeFrames,
     code: 'del',
     name: 'Delta',
     tagline: 'value → difference from predecessor',
@@ -291,7 +364,30 @@ const SCHEMES = [];
     }
   ];
 
+  const expanded = runs.reduce((a, [v, c]) => a.concat(Array(c).fill(v)), []);
+  const decodeFrames = [
+    {
+      commentary: 'Decode reads the flat <em>[value, count, …]</em> stream.',
+      rows: [mkRow('encoded', flat)]
+    },
+    {
+      commentary: 'Take the first pair <code>[A, 3]</code> — emit <em>A</em> three times.',
+      rows: [
+        mkRow('encoded',  flat, (v, i) => i < 2 ? 'hl' : 'dim'),
+        mkRow('expanded', ['A', 'A', 'A'], 'added')
+      ]
+    },
+    {
+      commentary: 'Expand every remaining pair the same way. The original sequence returns exactly &mdash; <code>rle</code> is lossless.',
+      rows: [
+        mkRow('encoded', flat, 'dim'),
+        mkRow('decoded', expanded, 'added')
+      ]
+    }
+  ];
+
   SCHEMES.push({
+    decodeFrames,
     code: 'rle',
     name: 'Run-Length',
     tagline: 'collapse runs of equal values',
@@ -337,7 +433,38 @@ const SCHEMES = [];
     }
   ];
 
+  const recon = [];
+  {
+    let ci = 0;
+    for (let i = 0; i < input.length; i++) {
+      recon.push(positions.includes(i) ? 0 : clean[ci++]);
+    }
+  }
+  const decodeFrames = [
+    {
+      commentary: 'Decode has the clean values, the sentinel positions, and the original length.',
+      rows: [mkRow('clean', clean.map(String))],
+      aux: [
+        ['snt_ranges', `{0: [[${positions[0]}], [${positions[1]}]]}`, 'where each stripped sentinel belongs in the output.'],
+        ['length',     String(input.length), 'how many slots to rebuild &mdash; the clean list is shorter.']
+      ]
+    },
+    {
+      commentary: `Allocate <em>length</em> slots and drop the sentinel <em>0</em> back at positions ${positions.join(' and ')}.`,
+      rows: [mkRow('slots', input.map((v, i) => positions.includes(i) ? '0' : '·'),
+                   (v, i) => positions.includes(i) ? 'sentinel' : 'dim')]
+    },
+    {
+      commentary: 'Fill the remaining slots from the clean stream in order. Original sequence restored &mdash; <code>stl</code> is lossless.',
+      rows: [
+        mkRow('clean',   clean.map(String), 'dim'),
+        mkRow('decoded', recon.map(String), (v, i) => positions.includes(i) ? 'sentinel' : 'added')
+      ]
+    }
+  ];
+
   SCHEMES.push({
+    decodeFrames,
     code: 'stl',
     name: 'Sentinel',
     tagline: 'strip outliers, store positions',
@@ -410,7 +537,35 @@ const SCHEMES = [];
     }
   ];
 
+  const decodeFrames = [
+    {
+      commentary: 'Decode base64 → bytes, then read the 2-byte header for <em>count</em>.',
+      bytes: [
+        { hex: '0x' + hex(b0), label: 'count.lo', cls: 'header' },
+        { hex: '0x' + hex(b1), label: 'count.hi|flags', cls: 'header' }
+      ],
+      aux: [
+        ['count',         String(count), 'number of bits to pull out of the payload.'],
+        ['constant_flag', '0',           'not set, so a real payload follows (a set flag would mean one repeated bit, no payload).']
+      ]
+    },
+    {
+      commentary: 'Unpack the payload bytes back into bits, MSB-first.',
+      bits: [
+        ...input.slice(0, 8),
+        '|',
+        ...input.slice(8), 0, 0, 0, 0, 0, 0
+      ],
+      aux: [['count', String(count), 'the trailing 6 padding bits are discarded.']]
+    },
+    {
+      commentary: 'Keep the first <em>' + count + '</em> bits and drop the padding. Bitmap is lossless.',
+      rows: [mkRow('decoded', input.map(String), v => v === 1 ? 'hl' : 'dim')]
+    }
+  ];
+
   SCHEMES.push({
+    decodeFrames,
     code: 'bm',
     name: 'Bitmap',
     tagline: '0/1 lists → packed bits',
@@ -498,7 +653,36 @@ const SCHEMES = [];
     }
   ];
 
+  const decodeFrames = [
+    {
+      commentary: 'Decode reads the 1-byte header: bits/value, count, and the FOR min.',
+      bytes: [
+        { hex: '0x' + hex(bpv), label: 'bpv', cls: 'header' },
+        { hex: '0x02',          label: 'flags', cls: 'header' },
+        { hex: '0x' + hex(input.length), label: 'count', cls: 'header' },
+        { hex: '0x' + hex(lo),  label: 'FOR.min', cls: 'header' }
+      ],
+      aux: [
+        ['bits/value', String(bpv), 'width of each packed cluster to read.'],
+        ['FOR.min',    String(lo),  'offset to add back after unpacking.']
+      ]
+    },
+    {
+      commentary: `Read the payload in ${bpv}-bit clusters, MSB-first — one cluster per value.`,
+      bits: bitsArr,
+      aux: [['bits/value', String(bpv), 'each highlighted cluster becomes one shifted value.']]
+    },
+    {
+      commentary: `Each cluster is a shifted value; add <em>FOR.min = ${lo}</em> back to every one. Original ints restored exactly — <code>bp</code> is lossless.`,
+      rows: [
+        mkRow('shifted',           shifted.map(String), 'dim'),
+        mkRow(`decoded (+ ${lo})`, input.map(String), 'added')
+      ]
+    }
+  ];
+
   SCHEMES.push({
+    decodeFrames,
     code: 'bp',
     name: 'Bit Packing',
     tagline: 'ints → minimum-width bit stream',
@@ -573,7 +757,40 @@ const SCHEMES = [];
     }
   ];
 
+  const decodeFrames = [
+    {
+      commentary: 'Decode reads the dominant value, the nullmap, and the packed non-dominant values.',
+      bits: [
+        ...nullmap, '|',
+        ...shifted.flatMap(v => {
+          const bs = [];
+          for (let b = bpv - 1; b >= 0; b--) bs.push((v >> b) & 1);
+          return bs;
+        })
+      ],
+      aux: [
+        ['dominant', String(dom),      'fills every position the nullmap marks 0.'],
+        ['nullmap',  nullmap.join(''), '1 bit per output position, read MSB-first.']
+      ]
+    },
+    {
+      commentary: `Unpack the non-dominant values (${bpv} bits each) and undo their FOR shift by adding <em>${lo}</em>.`,
+      rows: [
+        mkRow('shifted',              shifted.map(String), 'dim'),
+        mkRow(`non-dominant (+ ${lo})`, nonDom.map(String), 'added')
+      ]
+    },
+    {
+      commentary: 'Walk the nullmap: a <em>0</em> emits the dominant value, a <em>1</em> pulls the next non-dominant value. Lossless.',
+      rows: [
+        mkRow('nullmap', nullmap.map(String), v => v === 1 ? 'hl' : 'dim'),
+        mkRow('decoded', input.map(String), (v, i) => nullmap[i] === 1 ? 'added' : 'dom')
+      ]
+    }
+  ];
+
   SCHEMES.push({
+    decodeFrames,
     code: 'nbp',
     name: 'Nullmap Bit-Packing',
     tagline: 'sparse ints → nullmap + packed non-dominant',
@@ -585,39 +802,42 @@ const SCHEMES = [];
 
 // ─── 9. TBQM — TurboQuant MSE ──────────────────────────────────────
 (function () {
-  // Simplified 4-dimensional illustration (real algo works on any d >= 3).
-  const d = 4;
-  const input = [0.60, -0.45, 0.52, -0.40];
+  // 16-dimensional illustration (real algo works on any d >= 3).
+  const d = 16;
+  const input = [0.60, -0.45, 0.52, -0.40, 0.31, -0.72, 0.18, 0.63,
+                 -0.55, 0.22, -0.38, 0.47, 0.29, -0.61, 0.43, -0.15];
 
   // Step 1: normalize
-  const norm = Math.sqrt(input.reduce((s, v) => s + v * v, 0));
+  const norm = +Math.sqrt(input.reduce((s, v) => s + v * v, 0)).toFixed(4);
   const normalized = input.map(v => +(v / norm).toFixed(4));
 
-  // Step 2: pretend rotation (for illustration, use a simple permutation)
-  const rotated = [normalized[2], normalized[0], normalized[3], normalized[1]].map(v => +(v).toFixed(4));
+  // Step 2: seeded rotation — illustrated as a cyclic permutation (+7 mod 16)
+  const perm = Array.from({ length: d }, (_, i) => (i + 7) % d);
+  const rotated = perm.map(p => normalized[p]);
 
-  // Step 3: Lloyd-Max codebook with 2 bits (4 levels) — illustrative centroids
-  const cb2 = [-0.84, -0.28, 0.28, 0.84];
+  // Step 3: Lloyd-Max codebook with 4 bits (16 levels); illustrative uniform grid
+  const nbits = 4;
+  const levels = 1 << nbits;
+  const cb = Array.from({ length: levels }, (_, k) => +(-0.75 + 1.5 * k / (levels - 1)).toFixed(4));
   const indices = rotated.map(v => {
     let best = 0;
-    let bestDist = Math.abs(v - cb2[0]);
-    for (let k = 1; k < cb2.length; k++) {
-      const dist = Math.abs(v - cb2[k]);
+    let bestDist = Math.abs(v - cb[0]);
+    for (let k = 1; k < cb.length; k++) {
+      const dist = Math.abs(v - cb[k]);
       if (dist < bestDist) { bestDist = dist; best = k; }
     }
     return best;
   });
-  const quantized = indices.map(i => cb2[i]);
+  const quantized = indices.map(i => cb[i]);
 
-  // Step 4: bit-pack illustration — 2 bits × 4 values = 8 bits = 1 byte
-  const bits = indices.flatMap(i => [(i >> 1) & 1, i & 1]);
-  const byteVal = bits.reduce((acc, b, i) => acc | (b << (7 - i)), 0);
-  const hex = n => n.toString(16).toUpperCase().padStart(2, '0');
-  const b64 = btoa(String.fromCharCode(byteVal));
+  // Inverse permutation: perm[i] = (i+7)%d  →  inv[j] = (j+9)%d
+  const invPerm = Array.from({ length: d }, (_, j) => (j + 9) % d);
+  const invRotQuant = invPerm.map(p => quantized[p]);
+  const reconstructed = invRotQuant.map(v => +(v * norm).toFixed(2));
 
   const frames = [
     {
-      commentary: `Input: a <em>${d}-dimensional float vector</em>. TurboQuant treats the whole list as one entity and quantizes it together.`,
+      commentary: `Input: a <em>${d}-dimensional float vector</em> (e.g. a reduced embedding). TurboQuant treats the whole list as one entity and quantizes it together.`,
       rows: [mkRow('input (d=' + d + ')', input.map(v => v.toFixed(2)))]
     },
     {
@@ -627,7 +847,7 @@ const SCHEMES = [];
         mkRow('normalized', normalized.map(String), 'added')
       ],
       aux: [
-        ['tq_norm', norm.toFixed(4), 'original Euclidean norm — multiplied back during decode to restore scale.']
+        ['tq_norm', String(norm), 'original Euclidean norm — multiplied back during decode to restore scale.']
       ]
     },
     {
@@ -647,32 +867,59 @@ const SCHEMES = [];
         mkRow('codebook index', indices.map(String), 'added')
       ],
       aux: [
-        ['tq_bits', '2', 'bits per coordinate; here 2 bits → 4 codebook levels. A 4-bit codebook has 16 levels.']
+        ['tq_bits', String(nbits), 'bits per coordinate; here ' + nbits + ' bits → ' + levels + ' codebook levels. Fewer bits mean a coarser grid and higher loss.']
       ]
     },
     {
-      commentary: 'Pack all indices into a bitstream — ' + d + ' values × 2 bits = ' + (d * 2) + ' bits = 1 byte. Base64-encode for JSON transport.',
+      commentary: 'The output is a plain list of ' + d + ' codebook indices in [0, ' + (levels - 1) + ']. There is no bit-packing here: <code>tbqm</code> is composable, so a downstream <code>bp</code> stage (the pipeline <code>tbqm_bp</code>) does the final bit-level squeeze — ' + d + ' × ' + nbits + ' bits = ' + (d * nbits / 8) + ' B payload, versus ' + (d * 4) + ' B for ' + d + ' float32 values.',
       rows: [mkRow('indices', indices.map(String), 'added')],
-      bits: bits,
-      bytes: [
-        { hex: '0x' + hex(byteVal), label: 'packed' },
-        { hex: b64, label: 'base64', cls: 'b64' }
+      aux: [
+        ['tq_dim',  String(d),     'dimension, so the decoder knows how many indices to read.'],
+        ['tq_bits', String(nbits), 'bits per index; here ' + nbits + ' bits, so ' + levels + ' codebook levels.'],
+        ['tq_seed', '42',          'rotation seed.'],
+        ['tq_norm', String(norm),  'original norm, multiplied back after inverse-rotation.']
+      ],
+      meter: { orig: d + ' float32 = ' + (d * 4) + ' B', encoded: (d * nbits / 8) + ' B packed (tbqm_bp)', savedPct: '84 %' }
+    }
+  ];
+
+  const decodeFrames = [
+    {
+      commentary: 'Decode starts from the plain index list plus the aux parameters. When composed as <code>tbqm_bp</code>, the downstream packer has already unpacked these ints.',
+      rows: [mkRow('indices', indices.map(String))],
+      aux: [
+        ['tq_dim',  String(d),     'how many indices to read back.'],
+        ['tq_bits', String(nbits), 'bits per index, so the codebook has ' + levels + ' levels.']
+      ]
+    },
+    {
+      commentary: 'Look up each index in the same Lloyd-Max codebook to recover the rotated estimate.',
+      rows: [
+        mkRow('indices',        indices.map(String), 'dim'),
+        mkRow('codebook value', quantized.map(String), 'added')
+      ]
+    },
+    {
+      commentary: 'Invert the rotation with the stored seed, then rescale by the saved norm. TurboQuant is <em>lossy</em>, so the estimate is close, not exact.',
+      rows: [
+        mkRow('rotated est.',    quantized.map(String), 'dim'),
+        mkRow('inverse-rotated', invRotQuant.map(String), 'dim'),
+        mkRow('x̃ (× norm)',      reconstructed.map(v => v.toFixed(2)), 'added'),
+        mkRow('original',        input.map(v => v.toFixed(2)), 'dim')
       ],
       aux: [
-        ['tq_dim',  String(d),             'dimension — decoder needs to know how many indices to unpack.'],
-        ['tq_bits', '2',                   'bits per index.'],
-        ['tq_seed', '42',                  'rotation seed.'],
-        ['tq_norm', norm.toFixed(4),       'original norm — decoder multiplies by this after inverse-rotation.']
-      ],
-      meter: { orig: d + ' floats × ~4 B = ' + (d * 4) + ' B + aux', encoded: '1 B payload + 4 aux keys', savedPct: '—' }
+        ['tq_seed', '42',       'rebuilds the same rotation matrix Π so it can be inverted.'],
+        ['tq_norm', String(norm), 'multiplied back to restore the original scale.']
+      ]
     }
   ];
 
   SCHEMES.push({
+    decodeFrames,
     code: 'tbqm',
     name: 'TurboQuant MSE',
     tagline: 'float vector → rotation + codebook quantization (lossy)',
-    blurb: 'Applies a random rotation to distribute signal energy uniformly, then quantizes each coordinate using a Lloyd-Max codebook optimal for the resulting Beta distribution. Near-optimal MSE for dense float vectors. Terminal — produces a base64 blob directly, no downstream packer needed. Requires vector length ≥ 3.',
+    blurb: 'Applies a random rotation to distribute signal energy uniformly, then quantizes each coordinate using a Lloyd-Max codebook optimal for the resulting Beta distribution. Near-optimal MSE for dense float vectors. Emits a plain list of codebook indices, so it stays composable: a downstream packer (e.g. <code>tbqm_bp</code>) does the final bit-level squeeze. Requires vector length ≥ 3.',
     frames
   });
 })();
@@ -680,26 +927,42 @@ const SCHEMES = [];
 
 // ─── 10. TBQP — TurboQuant Prod ────────────────────────────────────
 (function () {
-  const d = 4;
-  const input = [0.60, -0.45, 0.52, -0.40];
+  const d = 16;
+  const input = [0.60, -0.45, 0.52, -0.40, 0.31, -0.72, 0.18, 0.63,
+                 -0.55, 0.22, -0.38, 0.47, 0.29, -0.61, 0.43, -0.15];
 
-  const norm = Math.sqrt(input.reduce((s, v) => s + v * v, 0));
+  const norm = +Math.sqrt(input.reduce((s, v) => s + v * v, 0)).toFixed(4);
   const normalized = input.map(v => +(v / norm).toFixed(4));
 
-  // MSE step with 1 bit (2 levels) — mse_bits = num_bits - 1 = 2 - 1 = 1
-  const rotated = [normalized[2], normalized[0], normalized[3], normalized[1]].map(v => +(v).toFixed(4));
-  const cb1 = [-0.56, 0.56];  // 1-bit Lloyd-Max centroids (illustrative)
-  const mseIdx = rotated.map(v => v >= 0 ? 1 : 0);
-  const mseQuant = mseIdx.map(i => cb1[i]);
+  // Same seeded rotation as tbqm (+7 mod 16 cyclic permutation)
+  const perm    = Array.from({ length: d }, (_, i) => (i + 7) % d);
+  const invPerm = Array.from({ length: d }, (_, j) => (j + 9) % d);
+  const rotated = perm.map(p => normalized[p]);
 
-  // Residual (in normalized space)
-  // inverse-rotate the quantized values back (simple permutation inverse)
-  const invRotQuant = [mseQuant[1], mseQuant[3], mseQuant[0], mseQuant[2]];
-  const residual = normalized.map((v, i) => +(v - invRotQuant[i]).toFixed(4));
-  const resNorm = +Math.sqrt(residual.reduce((s, v) => s + v * v, 0)).toFixed(4);
+  // MSE step with 3 bits (8 levels): mse_bits = num_bits - 1 = 4 - 1 = 3
+  const cbMse = [-0.7, -0.5, -0.3, -0.1, 0.1, 0.3, 0.5, 0.7];  // 3-bit codebook (illustrative)
+  const mseIdx = rotated.map(v => {
+    let best = 0;
+    let bestDist = Math.abs(v - cbMse[0]);
+    for (let k = 1; k < cbMse.length; k++) {
+      const dist = Math.abs(v - cbMse[k]);
+      if (dist < bestDist) { bestDist = dist; best = k; }
+    }
+    return best;
+  });
+  const mseQuant = mseIdx.map(i => cbMse[i]);
 
-  // QJL: sign of random projection of residual (illustrative)
-  const qjlSigns = [1, -1, 1, 1];
+  // Residual (in normalized space): inverse-rotate mse quant back, then subtract
+  const invRotMse = invPerm.map(p => mseQuant[p]);
+  const residual  = normalized.map((v, i) => +(v - invRotMse[i]).toFixed(4));
+  const resNorm   = +Math.sqrt(residual.reduce((s, v) => s + v * v, 0)).toFixed(4);
+
+  // QJL: sign of random projection of residual (illustrated as sign of residual itself)
+  const qjlSigns = residual.map(r => r >= 0 ? 1 : -1);
+
+  // Packed bit budget: 16 × 3-bit MSE + 16 × 1-bit QJL = 64 bits = 8 B + 2 B header = 10 B
+  const totalBits  = d * 3 + d * 1;
+  const packedB    = Math.ceil(totalBits / 8) + 2;
 
   const frames = [
     {
@@ -707,57 +970,101 @@ const SCHEMES = [];
       rows: [mkRow('input', input.map(v => v.toFixed(2)))]
     },
     {
-      commentary: 'Stage 1 — run TurboQuant MSE with (num_bits−1) bits. Here total bits=2, so MSE uses 1 bit (2 codebook levels). This is coarser than standard tbqm.',
+      commentary: 'Stage 1 — run TurboQuant MSE with (num_bits−1) bits. Here total bits=4, so MSE uses 3 bits (8 codebook levels), leaving the last bit per coordinate for QJL.',
       rows: [
-        mkRow('rotated (Πx)', rotated.map(String)),
-        mkRow('1-bit MSE indices', mseIdx.map(String), 'added'),
+        mkRow('rotated (Πx)',      rotated.map(String)),
+        mkRow('3-bit MSE indices', mseIdx.map(String), 'added'),
         mkRow('quantized (ỹ_mse)', mseQuant.map(String), 'added')
       ],
-      aux: [['tq_bits', '2', 'total bits. MSE stage uses tq_bits − 1 = 1 bit; the remaining 1 bit per coordinate goes to QJL.']]
+      aux: [['tq_bits', '4', 'total bits. MSE stage uses tq_bits − 1 = 3 bits; the remaining 1 bit per coordinate goes to QJL.']]
     },
     {
       commentary: 'Stage 2 — compute the residual: r = x_normalized − x̃_mse. This is the signal the MSE stage missed.',
       rows: [
-        mkRow('normalized', normalized.map(String), 'dim'),
-        mkRow('x̃_mse (inverse-rotated)', invRotQuant.map(String), 'dim'),
-        mkRow('residual r', residual.map(String), 'added')
+        mkRow('normalized',              normalized.map(String), 'dim'),
+        mkRow('x̃_mse (inverse-rotated)', invRotMse.map(String), 'dim'),
+        mkRow('residual r',              residual.map(String), 'added')
       ],
       aux: [['tq_rnorm', String(resNorm), 'Euclidean norm of the residual — scales the QJL reconstruction.']]
     },
     {
       commentary: 'Apply QJL (Quantized Johnson-Lindenstrauss): project the residual with a random Gaussian matrix S, take only the sign. Each sign costs exactly 1 bit. The resulting inner-product estimator is unbiased: E[⟨x̃, ỹ⟩] = ⟨x, y⟩.',
       rows: [
-        mkRow('residual r', residual.map(String), 'dim'),
+        mkRow('residual r',  residual.map(String), 'dim'),
         mkRow('sign(S · r)', qjlSigns.map(v => v > 0 ? '+1' : '−1'), 'added')
       ],
       aux: [
-        ['tq_qseed', '43', 'seed for the random Gaussian projection matrix S. Decoder reconstructs the same S to undo the projection.'],
+        ['tq_qseed', '43',           'seed for the random Gaussian projection matrix S. Decoder reconstructs the same S to undo the projection.'],
         ['tq_rnorm', String(resNorm), 'scales the QJL correction: x̃_qjl = (√π/2 / d) · ‖r‖ · Sᵀ · sign']
       ]
     },
     {
-      commentary: 'Pack all three parts — [mse_indices][qjl_signs][residual_norm 8-byte float64] — into a single base64 blob.',
+      commentary: 'Output: ' + d + ' MSE indices (3-bit each) plus 16 QJL sign bits. When packed as <code>tbqp_bp</code>: ' + d + '×3 + ' + d + '×1 = ' + totalBits + ' bits = ' + (totalBits / 8) + ' B payload + 2 B header. Same wire size as <code>tbqm_bp</code>, but inner-product unbiased.',
       rows: [
-        mkRow('mse indices (1-bit)', mseIdx.map(String), 'added'),
-        mkRow('qjl signs (1-bit each)', qjlSigns.map(v => v > 0 ? '+1' : '−1'), 'added')
+        mkRow('mse indices (3-bit)', mseIdx.map(String), 'added')
       ],
       aux: [
-        ['tq_dim',   String(d),      'vector dimension.'],
-        ['tq_bits',  '2',            'total bits per coordinate.'],
-        ['tq_seed',  '42',           'rotation seed.'],
-        ['tq_norm',  norm.toFixed(4),'original vector norm.'],
-        ['tq_rnorm', String(resNorm),'residual norm for QJL scaling.'],
-        ['tq_qseed', '43',           'QJL projection seed.']
+        ['tq_dim',   String(d),                                    'vector dimension.'],
+        ['tq_bits',  '4',                                          'total bits per coordinate.'],
+        ['tq_seed',  '42',                                         'rotation seed.'],
+        ['tq_norm',  String(norm),                                 'original vector norm.'],
+        ['tq_rnorm', String(resNorm),                              'residual norm for QJL scaling.'],
+        ['tq_qseed', '43',                                         'QJL projection seed.'],
+        ['tq_signs', qjlSigns.map(v => v > 0 ? 1 : 0).join(''),   'the QJL sign bits (mapped +1 to 1, −1 to 0), bitmap-encoded into a compact string.']
       ],
-      meter: { orig: d + ' floats × ~4 B', encoded: 'mse + qjl + 8-byte norm + 6 aux keys', savedPct: '—' }
+      meter: { orig: d + ' float32 = ' + (d * 4) + ' B', encoded: packedB + ' B packed (tbqp_bp)', savedPct: '84 %' }
+    }
+  ];
+
+  const factor        = Math.sqrt(Math.PI / 2) / d * resNorm;
+  const qjlCorr       = qjlSigns.map(s => +(factor * s).toFixed(4));
+  const normEst       = invRotMse.map((v, i) => +(v + qjlCorr[i]).toFixed(4));
+  const reconstructed = normEst.map(v => +(v * norm).toFixed(2));
+  const decodeFrames = [
+    {
+      commentary: 'Decode starts from the MSE index list. The QJL signs are recovered from aux (<code>tq_signs</code>, bitmap-decoded back to ±1), along with both norms.',
+      rows: [
+        mkRow('mse indices',               mseIdx.map(String)),
+        mkRow('qjl signs (from tq_signs)', qjlSigns.map(v => v > 0 ? '+1' : '−1'), 'dim')
+      ],
+      aux: [
+        ['tq_signs', qjlSigns.map(v => v > 0 ? 1 : 0).join(''), 'the QJL sign bits, bitmap-decoded back to ±1.'],
+        ['tq_norm',  String(norm),   'restores overall scale at the very end.'],
+        ['tq_rnorm', String(resNorm), 'scales the QJL residual correction.']
+      ]
+    },
+    {
+      commentary: 'Stage 1 — rebuild the MSE estimate from the 3-bit indices, then inverse-rotate it back into normalized space.',
+      rows: [
+        mkRow('mse indices',             mseIdx.map(String), 'dim'),
+        mkRow('x̃_mse (rotated)',         mseQuant.map(String), 'added'),
+        mkRow('x̃_mse (inverse-rotated)', invRotMse.map(String), 'added')
+      ]
+    },
+    {
+      commentary: 'Stage 2 — rebuild the projection matrix S from <code>tq_qseed</code> and add the QJL correction <code>(√π/2 / d)·‖r‖·Sᵀ·sign</code>.',
+      rows: [
+        mkRow('x̃_mse',          invRotMse.map(String), 'dim'),
+        mkRow('qjl correction', qjlCorr.map(v => (v >= 0 ? '+' : '') + v), 'added'),
+        mkRow('x̃ (normalized)', normEst.map(String), 'added')
+      ],
+      aux: [['tq_qseed', '43', 'reconstructs the same Gaussian projection S used at encode time.']]
+    },
+    {
+      commentary: 'Rescale by the saved norm. The result is <em>lossy</em> per element, but ⟨x̃, ỹ⟩ is an <em>unbiased</em> estimate of the true inner product — the property TurboQuant Prod optimizes for.',
+      rows: [
+        mkRow('x̃ (× norm)', reconstructed.map(v => v.toFixed(2)), 'added'),
+        mkRow('original',   input.map(v => v.toFixed(2)), 'dim')
+      ]
     }
   ];
 
   SCHEMES.push({
+    decodeFrames,
     code: 'tbqp',
     name: 'TurboQuant Prod',
     tagline: 'float vector → MSE + QJL residual (inner-product optimal, lossy)',
-    blurb: 'Two-stage variant: TurboQuant MSE with (bits−1) bits, plus a 1-bit-per-coordinate QJL residual correction. The combination makes ⟨x̃, ỹ⟩ an <em>unbiased estimator</em> of ⟨x, y⟩ — better for cosine-similarity / dot-product downstream tasks at the same bit budget. Terminal step, requires vector length ≥ 3.',
+    blurb: 'Two-stage variant: TurboQuant MSE with (bits−1) bits, plus a 1-bit-per-coordinate QJL residual correction. The combination makes ⟨x̃, ỹ⟩ an <em>unbiased estimator</em> of ⟨x, y⟩, better for cosine-similarity / dot-product downstream tasks at the same bit budget. Emits a plain list of MSE indices (the QJL signs ride along in aux) and stays composable with a downstream packer. Requires vector length ≥ 3.',
     frames
   });
 })();
@@ -778,7 +1085,17 @@ function buildSchemeSection(scheme, idx) {
 
       <div class="sch-stage">
         <div class="sch-stage-head">
-          <span class="sch-step-label">step</span>
+          <div class="sch-phases" data-role="phases">
+            <button class="sch-phase-seg encode active" data-jump="encode">
+              <span class="seg-label">encode</span>
+              <span class="seg-count">${scheme.frames.length}</span>
+            </button>
+            <span class="sch-phase-arrow">→</span>
+            <button class="sch-phase-seg decode" data-jump="decode">
+              <span class="seg-label">decode</span>
+              <span class="seg-count">${(scheme.decodeFrames || []).length}</span>
+            </button>
+          </div>
           <span class="sch-step-name" data-role="name">—</span>
           <span class="sch-step-counter">
             <b data-role="cur">1</b> / <span data-role="total">${scheme.frames.length}</span>
@@ -808,8 +1125,16 @@ function buildSchemeSection(scheme, idx) {
   const frameHost = $('[data-role="frame"]', sec);
   const nameEl    = $('[data-role="name"]', sec);
   const curEl     = $('[data-role="cur"]', sec);
+  const totalEl   = $('[data-role="total"]', sec);
+  const segEncode = $('[data-jump="encode"]', sec);
+  const segDecode = $('[data-jump="decode"]', sec);
   const speedEl   = $('[data-role="speed"]', sec);
   const playBtn   = $('[data-act="play"]', sec);
+
+  // encode frames, then the decode walk-back, played through one continuous timeline
+  const encFrames = scheme.frames;
+  const decFrames = scheme.decodeFrames || [];
+  const allFrames = encFrames.concat(decFrames);
 
   const state = {
     scheme,
@@ -820,24 +1145,33 @@ function buildSchemeSection(scheme, idx) {
   };
 
   function render() {
-    const f = scheme.frames[state.i];
+    const f = allFrames[state.i];
     frameHost.innerHTML = renderFrame(f);
-    nameEl.innerHTML    = `frame ${state.i + 1} <em>·</em> ${stepName(state.i, scheme.frames.length)}`;
-    curEl.textContent   = state.i + 1;
+    const inDecode    = state.i >= encFrames.length;
+    const phaseFrames = inDecode ? decFrames.length : encFrames.length;
+    const localI      = inDecode ? state.i - encFrames.length : state.i;
+    segEncode.classList.toggle('active', !inDecode);
+    segDecode.classList.toggle('active', inDecode);
+    // pulse the decode tab once encode finishes, to surface the walk-back
+    segDecode.classList.toggle('hint',
+      !inDecode && localI === encFrames.length - 1 && decFrames.length > 0);
+    nameEl.innerHTML  = stepName(localI, phaseFrames, inDecode);
+    curEl.textContent = localI + 1;
+    totalEl.textContent = phaseFrames;
   }
 
   function step(delta) {
-    state.i = Math.max(0, Math.min(scheme.frames.length - 1, state.i + delta));
-    if (state.i === scheme.frames.length - 1 && state.playing) pause();
+    state.i = Math.max(0, Math.min(allFrames.length - 1, state.i + delta));
+    if (state.i === allFrames.length - 1 && state.playing) pause();
     render();
   }
 
   function play() {
-    if (state.i >= scheme.frames.length - 1) state.i = 0;
+    if (state.i >= allFrames.length - 1) state.i = 0;
     state.playing = true;
     playBtn.textContent = '❚❚ pause';
     state.timer = setInterval(() => {
-      if (state.i >= scheme.frames.length - 1) { pause(); return; }
+      if (state.i >= allFrames.length - 1) { pause(); return; }
       step(1);
     }, state.speed);
   }
@@ -849,6 +1183,13 @@ function buildSchemeSection(scheme, idx) {
   function reset() { pause(); state.i = 0; render(); }
 
   sec.addEventListener('click', (ev) => {
+    const jump = ev.target.closest('[data-jump]')?.dataset.jump;
+    if (jump) {
+      pause();
+      state.i = (jump === 'decode' && decFrames.length) ? encFrames.length : 0;
+      render();
+      return;
+    }
     const act = ev.target.closest('[data-act]')?.dataset.act;
     if (!act) return;
     if (act === 'play')  state.playing ? pause() : play();
@@ -866,10 +1207,15 @@ function buildSchemeSection(scheme, idx) {
   return sec;
 }
 
-function stepName(i, total) {
-  if (i === 0) return 'input';
-  if (i === total - 1) return 'encoded';
-  return 'transformation ' + i;
+function stepName(i, total, decode) {
+  if (!decode) {
+    if (i === 0) return 'input';
+    if (i === total - 1) return 'encoded';
+    return 'transformation ' + i;
+  }
+  if (i === 0) return 'encoded record';
+  if (i === total - 1) return 'restored';
+  return 'inverse ' + i;
 }
 
 // ─── boot ──────────────────────────────────────────────────────────

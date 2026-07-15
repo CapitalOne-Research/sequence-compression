@@ -78,31 +78,52 @@
 /* send button */
 .diag-btn {
   position: absolute;
-  background: var(--neg-soft);
-  border: 1.5px solid #d4908c;
+  background: linear-gradient(to bottom, #f5f7f9 0%, #e8ecf0 100%);
+  border: 1.5px solid #b0b8c2;
+  border-bottom: none;
   border-radius: 10px;
   font-family: 'IBM Plex Sans', sans-serif;
   font-size: 13px;
   font-weight: 600;
-  color: var(--neg);
+  color: var(--ink);
   cursor: pointer;
   text-align: center;
   line-height: 1.35;
   padding: 12px 20px;
-  box-shadow: var(--shadow-2);
+  box-shadow:
+    0 5px 0 #9aa4ae,
+    0 6px 4px rgba(0,0,0,0.22),
+    inset 0 1px 0 rgba(255,255,255,0.8);
   transition: background var(--t-base) var(--ease),
               box-shadow var(--t-base) var(--ease),
               transform 80ms;
   user-select: none;
   box-sizing: border-box;
 }
-.diag-btn:hover { background: #f0d0ce; box-shadow: var(--shadow-3); }
-.diag-btn:active { transform: scale(0.97); }
+.diag-btn:hover {
+  background: linear-gradient(to bottom, #ffffff 0%, #edf1f5 100%);
+  box-shadow:
+    0 5px 0 #9aa4ae,
+    0 7px 6px rgba(0,0,0,0.25),
+    inset 0 1px 0 rgba(255,255,255,0.9);
+}
+.diag-btn:active {
+  transform: translateY(4px);
+  box-shadow:
+    0 1px 0 #9aa4ae,
+    0 2px 2px rgba(0,0,0,0.15),
+    inset 0 1px 0 rgba(255,255,255,0.6);
+}
 .diag-btn.fired {
-  background: var(--pos-soft);
+  background: linear-gradient(to bottom, #d4f0e0 0%, #c0e8d0 100%);
   border-color: #7abf99;
   color: var(--pos);
   cursor: default;
+  transform: translateY(4px);
+  box-shadow:
+    0 1px 0 #5a9e7a,
+    0 2px 2px rgba(0,0,0,0.12),
+    inset 0 1px 0 rgba(255,255,255,0.6);
 }
 
 /* model inference outer container */
@@ -168,9 +189,21 @@
   background: var(--accent);
   box-shadow: var(--shadow-1);
 }
-.payload-pill.active:hover {
-  background: var(--accent-strong);
-  border-color: var(--accent-strong);
+.payload-pill.active.red {
+  background: var(--neg);
+  border-color: var(--neg);
+}
+.payload-pill.active.red:hover {
+  background: #b52a22;
+  border-color: #b52a22;
+}
+.payload-pill.active.green {
+  background: var(--pos);
+  border-color: var(--pos);
+}
+.payload-pill.active.green:hover {
+  background: #0a7a3e;
+  border-color: #0a7a3e;
 }
 
 /* tooltip */
@@ -198,6 +231,12 @@
 .pill-tooltip .tooltip-diff {
   background: rgba(15, 110, 64, 0.35);
   color: #7effc0;
+  border-radius: 2px;
+  padding: 0 2px;
+}
+.pill-tooltip .tooltip-diff-red {
+  background: rgba(180, 40, 30, 0.30);
+  color: #ff9a94;
   border-radius: 2px;
   padding: 0 2px;
 }
@@ -331,6 +370,46 @@
 .seqpack-subtitle {
   color: var(--pos) !important;
   font-weight: 600;
+}
+
+/* ── optimisation callout (diagram 2, shown after animation) ─────── */
+.diag-callout {
+  position: absolute;
+  bottom: 18px;
+  left: 18px;
+  opacity: 0;
+  transition: opacity 500ms var(--ease);
+  pointer-events: none;
+  background: var(--pos-soft);
+  border: 1.5px solid var(--pos);
+  border-radius: var(--r-md);
+  padding: 10px 14px 10px 12px;
+  box-shadow: 0 0 0 3px rgba(15, 110, 64, 0.12);
+}
+.diag-callout.visible { opacity: 1; }
+.diag-callout ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.diag-callout li {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--pos);
+  line-height: 1.3;
+  white-space: nowrap;
+}
+.diag-callout li::before {
+  content: '✓';
+  font-weight: 700;
+  flex-shrink: 0;
 }
 
 /* ── reset link ───────────────────────────────────────────────────── */
@@ -477,18 +556,18 @@
       <!-- standard cylinder: dome top, flat bottom -->
       <svg width="96" height="62" viewBox="0 0 96 62" style="display:block;">
         <!-- body sides -->
-        <rect x="8" y="14" width="80" height="34" fill="var(--accent-tint)"/>
-        <line x1="8"  y1="14" x2="8"  y2="48" stroke="var(--accent)" stroke-width="1.5"/>
-        <line x1="88" y1="14" x2="88" y2="48" stroke="var(--accent)" stroke-width="1.5"/>
+        <rect x="8" y="14" width="80" height="34" fill="var(--neg-soft)"/>
+        <line x1="8"  y1="14" x2="8"  y2="48" stroke="var(--neg)" stroke-width="1.5"/>
+        <line x1="88" y1="14" x2="88" y2="48" stroke="var(--neg)" stroke-width="1.5"/>
         <!-- flat bottom cap -->
-        <ellipse cx="48" cy="48" rx="40" ry="10" fill="var(--accent-tint)" stroke="var(--accent)" stroke-width="1.5"/>
+        <ellipse cx="48" cy="48" rx="40" ry="10" fill="var(--neg-soft)" stroke="var(--neg)" stroke-width="1.5"/>
         <!-- dome top cap -->
-        <ellipse cx="48" cy="14" rx="40" ry="12" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="1.5"/>
+        <ellipse cx="48" cy="14" rx="40" ry="12" fill="#f5c5c2" stroke="var(--neg)" stroke-width="1.5"/>
       </svg>
       <div style="font-family:'IBM Plex Sans',sans-serif; font-size:13px; font-weight:600;
                   color:var(--ink); margin-top:6px;">Data Store</div>
-      <div style="font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--accent);
-                  margin-top:2px;">(raw feature seq)</div>
+      <div style="font-family:'IBM Plex Mono',monospace; font-size:11px;
+                  margin-top:2px; color:var(--neg);">(raw feature seq)</div>
     </div>
 
     <!-- Upstream Service -->
@@ -596,11 +675,11 @@
     <div class="diag-node" id="nodeStore2"
          style="background:transparent; padding:0; border:none; box-shadow:none; gap:0; align-items:center;">
       <svg width="96" height="62" viewBox="0 0 96 62" style="display:block;">
-        <rect x="8" y="14" width="80" height="34" fill="var(--accent-tint)"/>
-        <line x1="8"  y1="14" x2="8"  y2="48" stroke="var(--accent)" stroke-width="1.5"/>
-        <line x1="88" y1="14" x2="88" y2="48" stroke="var(--accent)" stroke-width="1.5"/>
-        <ellipse cx="48" cy="48" rx="40" ry="10" fill="var(--accent-tint)" stroke="var(--accent)" stroke-width="1.5"/>
-        <ellipse cx="48" cy="14" rx="40" ry="12" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="1.5"/>
+        <rect x="8" y="14" width="80" height="34" fill="var(--pos-soft)"/>
+        <line x1="8"  y1="14" x2="8"  y2="48" stroke="var(--pos)" stroke-width="1.5"/>
+        <line x1="88" y1="14" x2="88" y2="48" stroke="var(--pos)" stroke-width="1.5"/>
+        <ellipse cx="48" cy="48" rx="40" ry="10" fill="var(--pos-soft)" stroke="var(--pos)" stroke-width="1.5"/>
+        <ellipse cx="48" cy="14" rx="40" ry="12" fill="#b6f0cf" stroke="var(--pos)" stroke-width="1.5"/>
       </svg>
       <div style="font-family:'IBM Plex Sans',sans-serif; font-size:13px; font-weight:600;
                   color:var(--ink); margin-top:6px;">Data Store</div>
@@ -659,6 +738,14 @@
       <span class="lat-unit">ms</span>
     </div>
 
+    <!-- Optimisation callout (shown after animation completes) -->
+    <div class="diag-callout" id="callout2">
+      <ul>
+        <li>Feature Cache in Data Store being optimized</li>
+        <li>Inference Request Feature Payload being optimized</li>
+      </ul>
+    </div>
+
     <div class="diagram-reset" id="btnReset2">↺ reset diagram</div>
 
   </div>
@@ -689,7 +776,7 @@ const PAYLOADS = {
         "timestamp": 1720656000
     },
     "features": {
-        <span class="tooltip-diff">"f1": [0,0,1,1,1,0,0,1,1,1,0,0,1,1,1],
+        <span class="tooltip-diff-red">"f1": [0,0,1,1,1,0,0,1,1,1,0,0,1,1,1],
         "f2": [0,2,2,1,1,0,2,2,1,1,0,2,2,1,1],
         "f3": [1,0,1,1,2,1,0,1,1,2,1,0,1,1,2]</span>
     },
@@ -707,7 +794,7 @@ const PAYLOADS = {
         "timestamp": 1720656000
     },
     "features": {
-        <span class="tooltip-diff">"f1": [0,0,1,1,1,0,0,1,1,1,0,0,1,1,1],
+        <span class="tooltip-diff-red">"f1": [0,0,1,1,1,0,0,1,1,1,0,0,1,1,1],
         "f2": [0,2,2,1,1,0,2,2,1,1,0,2,2,1,1],
         "f3": [1,0,1,1,2,1,0,1,1,2,1,0,1,1,2]</span>
     },
@@ -727,9 +814,9 @@ const PAYLOADS = {
         "timestamp": 1720656000
     },
     "features": {
-        <span class="tooltip-diff">"f1": "encoded_f1",
-        "f2": "encoded_f2",
-        "f3": "encoded_f3"</span>
+        <span class="tooltip-diff">"f1": "adda1",
+        "f2": "a23ff",
+        "f3": "kk00f"</span>
     },
     "items": {
         "item1": {"id": "001", "name": "A"},
@@ -745,9 +832,9 @@ const PAYLOADS = {
         "timestamp": 1720656000
     },
     "features": {
-        <span class="tooltip-diff">"f1": "encoded_f1",
-        "f2": "encoded_f2",
-        "f3": "encoded_f3"</span>
+        <span class="tooltip-diff">"f1": "adda1",
+        "f2": "a23ff",
+        "f3": "kk00f"</span>
     },
     "items": {
         "item1": {"id": "001", "name": "A", "score": 0.9},
@@ -1071,9 +1158,12 @@ function makeDiagram(s) {
     tooltipResp.innerHTML = PAYLOADS[s].resp;
     pillReq.classList.add('active');  pillReq.setAttribute('tabindex', '0');
     pillResp.classList.add('active'); pillResp.setAttribute('tabindex', '0');
+    if (s === '') { pillReq.classList.add('red'); pillResp.classList.add('red'); }
+    if (s === '2') { pillReq.classList.add('green'); pillResp.classList.add('green'); }
     btnSend.textContent = '✓ Request complete';
     statusDetail.textContent = `round trip complete · ${ms} ms · hover payloads to inspect`;
     btnReset.classList.add('visible');
+    if (s === '2') document.getElementById('callout2').classList.add('visible');
   }
 
   function resetDiagram() {
@@ -1082,9 +1172,10 @@ function makeDiagram(s) {
     btnSend.innerHTML = 'Send RT<br>Recommendation<br>Request';
     latBadge.classList.remove('visible');
     latValue.textContent = '—';
-    pillReq.classList.remove('active');  pillReq.setAttribute('tabindex', '-1');
-    pillResp.classList.remove('active'); pillResp.setAttribute('tabindex', '-1');
+    pillReq.classList.remove('active', 'red', 'green');  pillReq.setAttribute('tabindex', '-1');
+    pillResp.classList.remove('active', 'red', 'green'); pillResp.setAttribute('tabindex', '-1');
     btnReset.classList.remove('visible');
+    if (s === '2') document.getElementById('callout2').classList.remove('visible');
     statusDetail.textContent = 'real-time recommendation · request flow animation';
     ['anim-s2u','anim-u2s','anim-req','anim-resp'].forEach(hideAnim);
     inferenceWrap.classList.remove('visible');
