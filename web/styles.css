@@ -903,7 +903,7 @@ hr { border: none; border-top: 1px solid var(--border); }
 
 .add-scheme-menu {
   position: absolute;
-  top: calc(100% + 4px);
+  bottom: calc(100% + 4px);
   left: 0;
   background: var(--surface);
   border: 1px solid var(--border);
@@ -1054,7 +1054,8 @@ hr { border: none; border-top: 1px solid var(--border); }
   font-variant-numeric: tabular-nums;
 }
 .out-value.hot { color: var(--accent); }
-.out-block:nth-child(4) .out-value.hot { color: var(--pos); }
+.out-value.saved-pos { color: var(--pos); }
+.out-value.saved-neg { color: var(--neg); }
 
 .out-sub {
   margin-top: 6px;
@@ -1202,6 +1203,7 @@ hr { border: none; border-top: 1px solid var(--border); }
   font-size: 12px;
 }
 .bar-savings.positive { color: var(--pos); }
+.bar-savings.negative { color: var(--neg); }
 .bar-savings.zero     { color: var(--muted); }
 
 
@@ -2565,6 +2567,111 @@ hr { border: none; border-top: 1px solid var(--border); }
 
 /* legacy classes kept for any old markup still in flight */
 .pg-byte-seg, .pg-byte-seg-label, .pg-byte-seg-bytes { display: none; }
+
+/* payload comparison — uncompressed vs compressed side-by-side */
+.pg-payload-compare {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+}
+.pg-payload-compare-head {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.pg-payload-compare-title {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+.pg-payload-compare-meta {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+}
+.pg-payload-compare-grid {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr auto;
+  gap: 0 16px;
+  align-items: start;
+}
+.pg-payload-compare-cell {
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  padding: 14px 16px;
+  background: var(--bg-elev);
+}
+.pg-payload-uncompressed {
+  border-top: 2px solid var(--border-strong);
+}
+.pg-payload-compressed {
+  border-top: 2px solid var(--accent);
+}
+.pg-payload-cell-label {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.pg-payload-cell-bytes {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.pg-payload-cell-bytes.hot { color: var(--accent); }
+.pg-payload-cell-note {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10.5px;
+  margin-bottom: 8px;
+}
+.pg-payload-compare-arrow {
+  align-self: center;
+  font-size: 20px;
+  color: var(--muted);
+  padding-top: 28px;
+}
+.pg-payload-compare-savings {
+  align-self: center;
+  text-align: center;
+  padding-top: 28px;
+  min-width: 90px;
+}
+.pg-payload-savings-num {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 15px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+.pg-payload-savings-num.shrunk,
+.pg-payload-compare-savings.shrunk .pg-payload-savings-num { color: var(--pos); }
+.pg-payload-savings-num.grew,
+.pg-payload-compare-savings.grew .pg-payload-savings-num   { color: var(--neg); }
+.pg-payload-savings-sub {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin-top: 3px;
+}
+
+@media (max-width: 680px) {
+  .pg-payload-compare-grid {
+    grid-template-columns: 1fr;
+  }
+  .pg-payload-compare-arrow { display: none; }
+  .pg-payload-compare-savings { padding-top: 0; text-align: left; }
+}
 
 
 /* ─── sample dataset button ─────────────────────────────────────── */
