@@ -24,7 +24,7 @@
   <p class="masthead-tagline">
     An interactive instrument for compressing recommender feature payloads — drop a
     parquet or csv file containing user or item feature sequences and route each
-    column through a pipeline of your choosing.
+    feature through a pipeline of your choosing.
   </p>
 
   <nav class="masthead-nav">
@@ -56,7 +56,7 @@
 
       <div class="intake-copy">
         <p class="lede">
-          Drop a feature payload file. The playground profiles each column,
+          Drop a feature payload file. The playground profiles each feature,
           infers the statistical shape of the sequence (categorical channel
           IDs, sparse interaction counts, dense embeddings, event timestamps, etc.),
           and recommends a compression pipeline suited to that shape.
@@ -115,11 +115,11 @@
         <div class="stat-value mono" id="filename">—</div>
       </div>
       <div class="stat">
-        <div class="stat-label">Rows</div>
+        <div class="stat-label">Users</div>
         <div class="stat-value" id="rowCount">—</div>
       </div>
       <div class="stat">
-        <div class="stat-label">Columns</div>
+        <div class="stat-label">Features</div>
         <div class="stat-value" id="colCount">—</div>
       </div>
       <div class="stat">
@@ -133,7 +133,7 @@
         <thead>
           <tr>
             <th>№</th>
-            <th>Column</th>
+            <th>Feature</th>
             <th>Inferred type</th>
             <th>Avg seq length</th>
             <th>Sample values</th>
@@ -156,7 +156,7 @@
   <div class="section-body">
 
     <p class="pipeline-help">
-      Compose an encoding pipeline per feature column. Steps apply
+      Compose an encoding pipeline per feature. Steps apply
       <em>left&#8209;to&#8209;right</em>; the decoder reverses them. Most
       recommender feature pipelines follow the rhythm of
       <span class="hot-italic">transform → reduce → pack</span>
@@ -212,9 +212,9 @@
 
     <div class="output-summary">
       <div class="out-block">
-        <div class="out-label">Rows encoded</div>
+        <div class="out-label">Users encoded</div>
         <div class="out-value" id="outRows">—</div>
-        <div class="out-sub mono" id="outRowsSub">across <span id="outColCount">—</span> feature columns</div>
+        <div class="out-sub mono" id="outRowsSub">across <span id="outColCount">—</span> features</div>
       </div>
       <div class="out-block">
         <div class="out-label">Original</div>
@@ -247,7 +247,7 @@
 
     <div class="output-wire">
       <div class="wire-header">
-        <span class="wire-title">Encoded entries · per-feature payload <span class="wire-note">list columns shown for row&nbsp;<span class="hot">1</span></span></span>
+        <span class="wire-title">Encoded entries · per-feature payload <span class="wire-note">list features shown for user&nbsp;<span class="hot">1</span></span></span>
         <button id="copyWire" class="btn-tiny">copy</button>
       </div>
       <pre class="wire-pre" id="wireOutput"></pre>
@@ -265,9 +265,9 @@
   <div class="section-body">
 
     <p class="dist-help">
-      Pipelines chosen <em>per row</em> across the encoded payload. Select a
-      feature column to see its pipeline distribution, or view <span class="hot-italic">All
-      columns</span> for the population-level histogram across every row of
+      Pipelines chosen <em>per user</em> across the encoded payload. Select a
+      feature to see its pipeline distribution, or view <span class="hot-italic">All
+      features</span> for the population-level histogram across every user of
       every feature.
     </p>
 

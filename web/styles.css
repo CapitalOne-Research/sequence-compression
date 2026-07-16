@@ -902,12 +902,10 @@ hr { border: none; border-top: 1px solid var(--border); }
 }
 
 .add-scheme-menu {
-  position: absolute;
-  bottom: calc(100% + 4px);
-  left: 0;
+  position: fixed;
   background: var(--surface);
   border: 1px solid var(--border);
-  z-index: 30;
+  z-index: 200;
   min-width: 320px;
   max-height: 400px;
   overflow-y: auto;

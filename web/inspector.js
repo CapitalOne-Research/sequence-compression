@@ -135,6 +135,20 @@ function renderChips() {
     });
   });
 
+  // position the fixed menu below its summary button when opened
+  addEl.querySelectorAll('details.add-scheme').forEach(details => {
+    details.addEventListener('toggle', () => {
+      if (!details.open) return;
+      const summary = details.querySelector('summary');
+      const menu = details.querySelector('.add-scheme-menu');
+      if (!summary || !menu) return;
+      const rect = summary.getBoundingClientRect();
+      const menuHeight = menu.offsetHeight || 400;
+      menu.style.top  = `${rect.top - menuHeight - 4}px`;
+      menu.style.left = `${rect.left}px`;
+    });
+  });
+
   // wire add-menu items
   addEl.querySelectorAll('.add-scheme-item').forEach(el => {
     el.addEventListener('click', e => {
