@@ -108,7 +108,7 @@ async function handleFile(file) {
     const fd = new FormData();
     fd.append('file', file);
     const res = await fetch('/api/inspect', { method: 'POST', body: fd });
-    const data = await res.json();
+    const data = await parseJsonResponse(res);
     if (!res.ok) throw new Error(data.error || `${res.status}`);
 
     state.fileId = data.id;
@@ -249,6 +249,25 @@ function renderPipelineComposer() {
         list.querySelectorAll('details.add-scheme').forEach(o => {
           if (o !== d) o.open = false;
         });
+        // Position menu using fixed coords to escape the overflow:auto clipping ancestor.
+        const menu = d.querySelector('.add-scheme-menu');
+        const summary = d.querySelector('summary');
+        if (menu && summary) {
+          const rect = summary.getBoundingClientRect();
+          const menuHeight = Math.min(400, window.innerHeight * 0.6);
+          const spaceAbove = rect.top;
+          const spaceBelow = window.innerHeight - rect.bottom;
+          if (spaceAbove > menuHeight || spaceAbove > spaceBelow) {
+            // open upward
+            menu.style.top = '';
+            menu.style.bottom = (window.innerHeight - rect.top + 4) + 'px';
+          } else {
+            // open downward
+            menu.style.bottom = '';
+            menu.style.top = (rect.bottom + 4) + 'px';
+          }
+          menu.style.left = rect.left + 'px';
+        }
       }
     });
   });
@@ -434,7 +453,7 @@ async function runEncode() {
 
     const start = performance.now();
     const res = await fetch('/api/encode', { method: 'POST', body: fd });
-    const data = await res.json();
+    const data = await parseJsonResponse(res);
     const roundTrip = performance.now() - start;
     if (!res.ok) throw new Error(data.error || `${res.status}`);
 
@@ -947,6 +966,17 @@ function toast(msg, kind = 'info') {
 
 
 // ─────────────────────────  FORMATTERS  ────────────────────────────
+
+async function parseJsonResponse(res) {
+  const text = await res.text();
+  try {
+    return JSON.parse(text);
+  } catch {
+    // Server returned non-JSON (e.g. Tornado HTML error page when buffer limit hit)
+    const preview = text.slice(0, 120).replace(/\s+/g, ' ').trim();
+    throw new Error(`server returned non-JSON (${res.status}): ${preview}`);
+  }
+}
 
 function formatBytes(b) {
   if (b == null || isNaN(b)) return '—';

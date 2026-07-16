@@ -905,7 +905,7 @@ def make_app() -> tornado.web.Application:
 
 
 def main() -> None:
-    port = int(os.environ.get("PORT", 8888))
+    port = int(sys.argv[1]) if len(sys.argv) > 1 else int(os.environ.get("PORT", 8888))
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     app = make_app()
     app.listen(port, address="0.0.0.0")
