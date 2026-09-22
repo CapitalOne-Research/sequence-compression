@@ -8,3 +8,9 @@ __pycache__
 .claude
 *.egg-info
 paper/
+dist/
+build/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage

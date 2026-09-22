@@ -1,0 +1,40 @@
+name: Bug report
+description: Report a problem with seqpack
+labels: ["bug"]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: A clear description of the bug, including what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Minimal reproduction
+      description: >
+        Input values and pipeline/schema string (or a short script) that
+        reproduces the issue. Encoded/decoded values, not just a description,
+        make this much faster to debug.
+      render: python
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: seqpack version
+      description: Output of `python -c "import seqpack; print(seqpack.__version__)"`
+    validations:
+      required: true
+  - type: input
+    id: python-version
+    attributes:
+      label: Python version
+    validations:
+      required: true
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else?
+      description: Extras installed (`spark`, `web`), OS, etc.

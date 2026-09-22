@@ -1,11 +1,12 @@
-"""Tests for c1.aiml.compression.utils.metrics (non-Spark functions only)."""
+"""Tests for seqpack.utils.metrics (non-Spark functions only)."""
 
 import math
 
 import numpy as np
 import pandas as pd
+import pytest
 
-from c1.aiml.compression.utils.metrics import (
+from seqpack.utils.metrics import (
     encoding_counter,
     get_metrics,
     get_sequence_length_from_dict,
@@ -30,7 +31,11 @@ class TestQuantizationLoss:
 
     def test_empty(self):
         loss = quantization_loss([], [])
-        assert loss == {"mae": 0.0, "max_ae": 0.0, "rmse": 0.0, "mre": 0.0, "snr_db": float("inf")}
+        assert loss["mae"] == 0.0
+        assert loss["max_ae"] == 0.0
+        assert loss["rmse"] == 0.0
+        assert loss["mre"] == 0.0
+        assert loss["snr_db"] == float("inf")
 
     def test_skips_zero_originals_in_mre(self):
         # Original has a 0; mre should ignore it (no division by zero)
@@ -38,11 +43,8 @@ class TestQuantizationLoss:
         assert loss["mre"] == 0.05  # |10-10.5|/10
 
     def test_shape_mismatch_raises(self):
-        try:
+        with pytest.raises(ValueError):
             quantization_loss([1.0, 2.0], [1.0])
-        except ValueError:
-            return
-        raise AssertionError("expected ValueError")
 
 
 class TestVerifyPayloadsEqual:

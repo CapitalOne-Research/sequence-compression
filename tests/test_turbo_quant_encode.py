@@ -3,9 +3,9 @@
 import numpy as np
 import pytest
 
-from c1.aiml.compression.encoding.schemes.tbqm_encoding import encode as tbqm_encode
-from c1.aiml.compression.encoding.schemes.tbqp_encoding import encode as tbqp_encode
-from c1.aiml.compression.encoding.feature_encode import encode_feature
+from seqpack.encoding.schemes.tbqm_encoding import encode as tbqm_encode
+from seqpack.encoding.schemes.tbqp_encoding import encode as tbqp_encode
+from seqpack.encoding.feature_encode import encode_feature
 
 
 # ─── tbqm ─────────────────────────────────────────────────────────────────

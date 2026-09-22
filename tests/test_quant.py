@@ -5,9 +5,10 @@ rather than equal to the original input.
 """
 
 import numpy as np
+import pytest
 
-from c1.aiml.compression.encoding.schemes.quant_encoding import encode
-from c1.aiml.compression.decoding.schemes.quant_decoding import decode
+from seqpack.encoding.schemes.quant_encoding import encode
+from seqpack.decoding.schemes.quant_decoding import decode
 
 
 def _max_abs_error(original, reconstructed):
@@ -54,3 +55,21 @@ class TestQuantRoundTrip:
         max_q = (1 << aux["q_bits"]) - 1
         assert min(encoded) >= 0
         assert max(encoded) <= max_q
+
+    def test_num_bits_zero_raises_value_error(self):
+        with pytest.raises(ValueError, match="num_bits must be between 1 and 16"):
+            encode([1.0, 2.0, 3.0], num_bits=0)
+
+    def test_num_bits_too_large_raises_value_error(self):
+        with pytest.raises(ValueError, match="num_bits must be between 1 and 16"):
+            encode([1.0, 2.0, 3.0], num_bits=64)
+
+    def test_num_bits_one_on_symmetric_data_does_not_divide_by_zero(self):
+        # Zero-centered data triggers the symmetric path, whose offset is
+        # (1 << (num_bits - 1)) - 1 -- which is 0 at num_bits=1 and used to
+        # raise ZeroDivisionError. num_bits=1 must fall back to asymmetric.
+        values = [1.0, -1.0, 0.5, -0.5]
+        encoded, aux = encode(values, num_bits=1)
+        assert aux["q_sym"] == 0
+        decoded = decode(encoded, **aux)
+        assert _max_abs_error(values, decoded) <= aux["q_scale"]

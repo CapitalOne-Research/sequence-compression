@@ -1,7 +1,7 @@
 """Tests for the nbp (nullmap bit-packing) encoding/decoding pair."""
 
-from c1.aiml.compression.encoding.schemes.nbp_encoding import encode
-from c1.aiml.compression.decoding.schemes.nbp_decoding import decode
+from seqpack.encoding.schemes.nbp_encoding import encode
+from seqpack.decoding.schemes.nbp_decoding import decode
 
 
 class TestNbpRoundTrip:

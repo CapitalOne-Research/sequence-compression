@@ -1,7 +1,9 @@
 """Tests for the rle (run-length encoding) encoding/decoding pair."""
 
-from c1.aiml.compression.encoding.schemes.rle_encoding import encode
-from c1.aiml.compression.decoding.schemes.rle_decoding import decode
+import pytest
+
+from seqpack.encoding.schemes.rle_encoding import encode
+from seqpack.decoding.schemes.rle_decoding import decode
 
 
 class TestRleRoundTrip:
@@ -33,3 +35,7 @@ class TestRleRoundTrip:
         encoded, _ = encode(values)
         assert encoded == ["a", 2, "b", 3]
         assert decode(encoded) == values
+
+    def test_odd_length_raises_value_error(self):
+        with pytest.raises(ValueError, match="even length"):
+            decode([1, 2, 3])

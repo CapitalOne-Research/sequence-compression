@@ -1,0 +1,52 @@
+name: Publish to PyPI
+
+# Runs only when a GitHub Release is published — never on every push/PR.
+# Uses PyPI Trusted Publishing (OIDC), so no API token is stored in this repo.
+# One-time setup required before this workflow can succeed: register this
+# repo + workflow filename as a trusted publisher for the `seqpack` project
+# at https://pypi.org/manage/project/seqpack/settings/publishing/
+on:
+  release:
+    types: [published]
+
+  # Allows a maintainer to dry-run the build (skips the actual publish step)
+  # from the Actions tab without cutting a release.
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install build tools
+        run: pip install build twine
+      - name: Build sdist and wheel
+        run: python -m build
+      - name: Check package metadata
+        run: python -m twine check dist/*
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    needs: build
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/seqpack/
+    permissions:
+      id-token: write  # required for Trusted Publishing (OIDC)
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1

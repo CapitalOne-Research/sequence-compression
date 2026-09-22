@@ -1,7 +1,7 @@
 """Tests for the auto encoding graph search added to feature_encode."""
 
-from c1.aiml.compression.decoding.feature_decode import decode_feature_payload
-from c1.aiml.compression.encoding.auto_encode import (
+from seqpack.decoding.feature_decode import decode_feature_payload
+from seqpack.encoding.auto_encode import (
     _AUTO_AUX_EMITTING,
     _AUTO_TERMINAL,
     _auto_can_apply,
@@ -9,7 +9,8 @@ from c1.aiml.compression.encoding.auto_encode import (
     auto_encode,
     validate_pipeline,
 )
-from c1.aiml.compression.encoding.feature_encode import encode_feature_payload
+from seqpack.encoding.feature_encode import encode_feature_payload
+from seqpack.wire import EncodedEntry
 
 
 class TestInferListType:
@@ -111,25 +112,29 @@ class TestAutoEncode:
         # must not pick a path containing 'quant'
         values = [1.0 + 0.001 * i for i in range(50)]
         _, scheme, _ = auto_encode(values, lossy=False)
-        assert "quant" not in scheme.split("_") if scheme else True
+        assert "quant" not in (scheme or "").split("_")
 
     def test_lossy_makes_quant_eligible(self):
-        # quant is in the candidate list, but it might still not win;
-        # we just verify the call does not raise and yields a valid path.
-        values = [float(i) for i in range(50)]
-        encoded, scheme, aux = auto_encode(values, lossy=True)
-        # Whatever path was chosen, either no encoding or some valid scheme
-        assert isinstance(scheme, str)
+        # On the same data, lossy=True should pick a quant-containing path --
+        # otherwise this test can't distinguish "eligible" from "never tried".
+        values = [1.0 + 0.001 * i for i in range(50)]
+        _, scheme, _ = auto_encode(values, lossy=True)
+        assert "quant" in scheme.split("_")
 
     def test_default_is_lossy(self):
         # Default call (no flags) should allow lossy schemes and produce
         # at least as small a result as lossy=False on float data.
         values = [float(i) / 7 for i in range(64)]
-        _, _, _ = auto_encode(values)  # must not raise
-        _, lossless_scheme, _ = auto_encode(values, lossy=False)
-        _, lossy_scheme, _ = auto_encode(values, lossy=True)
+        default_encoded, default_scheme, default_aux = auto_encode(values)
+        lossless_encoded, lossless_scheme, lossless_aux = auto_encode(values, lossy=False)
+        lossy_encoded, lossy_scheme, lossy_aux = auto_encode(values, lossy=True)
         # lossy=True is the default; spot-check that the two explicit calls agree
-        assert lossy_scheme == auto_encode(values)[1]
+        assert lossy_scheme == default_scheme
+        assert lossy_encoded == default_encoded
+        assert lossy_aux == default_aux
+        default_size = EncodedEntry(default_encoded, default_scheme, default_aux).byte_size()
+        lossless_size = EncodedEntry(lossless_encoded, lossless_scheme, lossless_aux).byte_size()
+        assert default_size <= lossless_size
 
     def test_terminal_steps_have_no_children_in_returned_scheme(self):
         # If a terminal step appears, it must be the last step in the pipeline
@@ -244,7 +249,7 @@ class TestValidatePipeline:
     def test_transition_table_and_labels_stay_in_sync(self):
         # Every scheme the search knows about must be labellable, so warnings
         # never leak a bare short code.
-        from c1.aiml.compression.encoding.auto_encode import (
+        from seqpack.encoding.auto_encode import (
             _AUTO_TYPE_TRANSITIONS,
             _SCHEME_LABELS,
         )

@@ -1,8 +1,9 @@
-"""Tests for c1.aiml.compression.utils.bitpack."""
+"""Tests for seqpack.utils.bitpack."""
 
 import numpy as np
+import pytest
 
-from c1.aiml.compression.utils.bitpack import (
+from seqpack.utils.bitpack import (
     decode_count,
     decode_signed_varint,
     decode_varint,
@@ -15,19 +16,19 @@ from c1.aiml.compression.utils.bitpack import (
 
 
 class TestVarint:
-    def test_round_trip_small(self):
-        for n in [0, 1, 42, 127]:
-            data = encode_varint(n)
-            value, consumed = decode_varint(data, 0)
-            assert value == n
-            assert consumed == len(data)
+    @pytest.mark.parametrize("n", [0, 1, 42, 127])
+    def test_round_trip_small(self, n):
+        data = encode_varint(n)
+        value, consumed = decode_varint(data, 0)
+        assert value == n
+        assert consumed == len(data)
 
-    def test_round_trip_multibyte(self):
-        for n in [128, 16383, 16384, 1 << 30]:
-            data = encode_varint(n)
-            value, consumed = decode_varint(data, 0)
-            assert value == n
-            assert consumed == len(data)
+    @pytest.mark.parametrize("n", [128, 16383, 16384, 1 << 30])
+    def test_round_trip_multibyte(self, n):
+        data = encode_varint(n)
+        value, consumed = decode_varint(data, 0)
+        assert value == n
+        assert consumed == len(data)
 
     def test_offset_in_buffer(self):
         prefix = b"\xff\xff"
@@ -38,11 +39,11 @@ class TestVarint:
 
 
 class TestSignedVarint:
-    def test_round_trip(self):
-        for n in [-1 << 30, -1, 0, 1, 1 << 30]:
-            data = encode_signed_varint(n)
-            value, _ = decode_signed_varint(data, 0)
-            assert value == n
+    @pytest.mark.parametrize("n", [-1 << 30, -1, 0, 1, 1 << 30])
+    def test_round_trip(self, n):
+        data = encode_signed_varint(n)
+        value, _ = decode_signed_varint(data, 0)
+        assert value == n
 
 
 class TestEncodeCount:
@@ -103,3 +104,18 @@ class TestPackBits:
         packed = pack_bits([0b101], 2)
         result = unpack_bits(packed, 1, 2).tolist()
         assert result == [0b01]
+
+    def test_bits_per_value_63_round_trips(self):
+        values = [0, 2**62, 5]
+        packed = pack_bits(values, 63)
+        assert unpack_bits(packed, len(values), 63).tolist() == values
+
+    def test_pack_bits_rejects_width_64(self):
+        # Width 64 would need a weight of 1 << 63, which overflows int64 to
+        # a negative number and silently sign-flips the result on unpack.
+        with pytest.raises(ValueError, match="between 0 and 63"):
+            pack_bits([0, 1, 2], 64)
+
+    def test_unpack_bits_rejects_width_64(self):
+        with pytest.raises(ValueError, match="between 0 and 63"):
+            unpack_bits(b"", 3, 64)
