@@ -1,8 +1,8 @@
-"""Tests for c1.aiml.compression.utils.benchmark (non-plotting paths)."""
+"""Tests for seqpack.utils.benchmark (non-plotting paths)."""
 
 import pandas as pd
 
-from c1.aiml.compression.utils.benchmark import (
+from seqpack.utils.benchmark import (
     _benchmark_single,
     _format_time,
     _pick_display_unit,

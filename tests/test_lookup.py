@@ -1,11 +1,14 @@
-"""Tests for c1.aiml.compression.utils.lookup."""
+"""Tests for seqpack.utils.lookup."""
 
-from c1.aiml.compression.utils.lookup import (
+from typing import get_type_hints
+
+from seqpack.utils.lookup import (
     DECODE_PARAMS,
     DECODING_SCHEMES,
     ENCODE_PARAMS,
     ENCODING_SCHEMES,
 )
+from seqpack.wire import AUX_SCHEMAS
 
 EXPECTED_SHORT_CODES = {"bm", "bp", "cat", "del", "nbp", "quant", "rle", "stl", "tbqm", "tbqp"}
 
@@ -49,3 +52,13 @@ def test_decode_params_match_known_signatures():
     # TurboQuant
     assert set(DECODE_PARAMS["tbqm"]) == {"tq_dim", "tq_bits", "tq_seed", "tq_norm"}
     assert set(DECODE_PARAMS["tbqp"]) == {"tq_dim", "tq_bits", "tq_seed", "tq_norm", "tq_rnorm", "tq_qseed", "tq_signs"}
+
+
+def test_aux_schemas_match_decode_params():
+    # decode_feature dispatches aux kwargs to decode() by parameter name
+    # (feature_decode.py). If a scheme's AUX_SCHEMAS TypedDict and its
+    # decode() signature drift apart, a typo silently drops a decode
+    # parameter instead of raising -- this pins the two together.
+    assert set(AUX_SCHEMAS) == set(DECODE_PARAMS)
+    for code, schema in AUX_SCHEMAS.items():
+        assert set(get_type_hints(schema)) == set(DECODE_PARAMS[code]), code

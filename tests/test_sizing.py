@@ -1,11 +1,11 @@
-"""Tests for c1.aiml.compression.utils.sizing."""
+"""Tests for seqpack.utils.sizing."""
 
 import json
 from decimal import Decimal
 
 import numpy as np
 
-from c1.aiml.compression.utils.sizing import (
+from seqpack.utils.sizing import (
     _convert_keys_to_native,
     _ensure_list,
     convert_to_json,
@@ -55,6 +55,17 @@ class TestGetJsonByteSize:
         # Should not raise; size should equal native-keyed dict
         native = {1: "a", 2: "b"}
         assert get_json_byte_size(data) == get_json_byte_size(native)
+
+    def test_measures_true_utf8_length_for_non_ascii(self):
+        # convert_to_json (the wire serialiser) escapes non-ASCII to \uXXXX,
+        # which is roughly 2x the real UTF-8 length. Size measurement must
+        # use the true UTF-8 length, or non-ASCII columns get penalized.
+        data = ["日本語"]
+        true_utf8_len = len(
+            json.dumps(data, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+        )
+        assert get_json_byte_size(data) == true_utf8_len
+        assert get_json_byte_size(data) < len(convert_to_json(data))
 
 
 class TestConvertKeysToNative:

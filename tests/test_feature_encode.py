@@ -1,4 +1,4 @@
-"""Tests for c1.aiml.compression.encoding.feature_encode (pandas path).
+"""Tests for seqpack.encoding.feature_encode (pandas path).
 
 Covers ``encode_feature``, ``encode_feature_payload``, ``encode_feature_df``,
 and ``evaluate_candidates``. ``auto_encode`` has its own test module.
@@ -9,13 +9,14 @@ import json
 import pandas as pd
 import pytest
 
-from c1.aiml.compression.decoding.feature_decode import decode_feature_payload
-from c1.aiml.compression.encoding.feature_encode import (
+from seqpack.decoding.feature_decode import decode_feature_payload
+from seqpack.encoding.feature_encode import (
     encode_feature,
     encode_feature_df,
     encode_feature_payload,
     evaluate_candidates,
 )
+from seqpack.exceptions import InvalidInputError, SeqPackError, UnknownSchemeError
 
 
 class TestEncodeFeature:
@@ -24,6 +25,18 @@ class TestEncodeFeature:
         assert value == [1, 2, 3]
         assert scheme == ""
         assert aux == {}
+
+    def test_unknown_scheme_raises_value_error(self):
+        with pytest.raises(ValueError, match="Unknown encoding step"):
+            encode_feature([1, 2, 3], "nosuchscheme")
+
+    def test_unknown_scheme_raises_unknown_scheme_error(self):
+        # UnknownSchemeError is a ValueError subclass, so both the specific
+        # type and the pre-existing `except ValueError` pattern keep working.
+        with pytest.raises(UnknownSchemeError):
+            encode_feature([1, 2, 3], "nosuchscheme")
+        with pytest.raises(SeqPackError):
+            encode_feature([1, 2, 3], "nosuchscheme")
 
     def test_single_step(self):
         value, scheme, aux = encode_feature([0, 1, 0, 1, 0, 1] * 5, "bm")
@@ -38,19 +51,23 @@ class TestEncodeFeature:
         assert "stoi" in aux  # cat populated; bp added nothing
 
     def test_drops_encoding_when_not_beneficial(self):
-        # A 3-element list barely benefits from heavy headers; bp on it
-        # is typically larger than the original
+        # A 3-element int list: bp's base64 header overhead is larger than
+        # the original JSON, so the encoding must be stripped.
         values = [1, 2, 3]
-        value, scheme, aux = encode_feature(values, "cat_bp")
-        # If encoding made it bigger, it's stripped
-        # We can't always guarantee that; but the contract is: if returned
-        # scheme is empty, aux must be empty too
-        if not scheme:
-            assert aux == {}
-            assert value == values
+        value, scheme, aux = encode_feature(values, "bp")
+        assert scheme == ""
+        assert aux == {}
+        assert value == values
 
 
 class TestEncodeFeaturePayload:
+    def test_non_dict_payload_raises_invalid_input_error(self):
+        with pytest.raises(InvalidInputError, match="dict"):
+            encode_feature_payload([1, 2, 3])
+        # Also catchable as TypeError, matching the pre-existing failure mode.
+        with pytest.raises(TypeError):
+            encode_feature_payload("not a dict")
+
     def test_basic_payload(self):
         payload = {"a": [0, 1, 0, 1, 0, 1] * 10}
         encoded = encode_feature_payload(payload, {"a": "bm"})
@@ -98,11 +115,12 @@ class TestEvaluateCandidates:
         assert scheme in ("bp", "rle", "rle_bp")
 
     def test_returns_original_when_no_candidate_helps(self):
-        # Tiny inputs typically can't be compressed below the JSON size
+        # A single-element list: bp's header overhead exceeds the original
+        # JSON size, so no candidate ever beats it.
         encoded_value, scheme, aux = evaluate_candidates([1], ["bp"])
-        if scheme is None:
-            assert aux == {}
-            assert encoded_value == [1]
+        assert scheme is None
+        assert aux == {}
+        assert encoded_value == [1]
 
     def test_caching_returns_a_compressed_result(self):
         # cache=True (the default) measures intermediate sizes and picks the
@@ -112,8 +130,19 @@ class TestEvaluateCandidates:
         assert scheme is not None
         assert scheme != ""
 
+    def test_unknown_scheme_raises_value_error(self):
+        with pytest.raises(ValueError, match="Unknown encoding step"):
+            evaluate_candidates([1, 2, 3], ["bp", "nosuchscheme"])
+
 
 class TestEncodeFeatureDf:
+    def test_non_dataframe_raises_invalid_input_error(self):
+        with pytest.raises(InvalidInputError, match="DataFrame"):
+            encode_feature_df([{"a": [1, 2, 3]}], {"a": "bp"})
+        # Also catchable as TypeError, matching the pre-existing failure mode.
+        with pytest.raises(TypeError):
+            encode_feature_df({"a": [1, 2, 3]})
+
     def test_drop_originals_default(self):
         df = pd.DataFrame({"a": [[0, 1, 0, 1, 0, 1] * 10] * 3})
         out = encode_feature_df(df, {"a": "bm"})

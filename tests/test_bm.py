@@ -1,7 +1,9 @@
 """Tests for the bm (bitmap) encoding/decoding pair."""
 
-from c1.aiml.compression.encoding.schemes.bm_encoding import encode
-from c1.aiml.compression.decoding.schemes.bm_decoding import decode
+import pytest
+
+from seqpack.encoding.schemes.bm_encoding import encode, BM_MAX_COUNT
+from seqpack.decoding.schemes.bm_decoding import decode
 
 
 class TestBmRoundTrip:
@@ -26,10 +28,10 @@ class TestBmRoundTrip:
         encoded, _ = encode(values)
         assert decode(encoded) == values
 
-    def test_single_element(self):
-        for v in [0, 1]:
-            encoded, _ = encode([v])
-            assert decode(encoded) == [v]
+    @pytest.mark.parametrize("v", [0, 1])
+    def test_single_element(self, v):
+        encoded, _ = encode([v])
+        assert decode(encoded) == [v]
 
     def test_max_supported_length(self):
         values = [(i % 2) for i in range(16383)]
@@ -40,3 +42,7 @@ class TestBmRoundTrip:
         constant_encoded, _ = encode([1] * 100)
         mixed_encoded, _ = encode([1, 0] * 50)
         assert len(constant_encoded) < len(mixed_encoded)
+
+    def test_exceeding_max_count_raises_value_error(self):
+        with pytest.raises(ValueError, match=str(BM_MAX_COUNT)):
+            encode([1, 0] * ((BM_MAX_COUNT + 1) // 2 + 1))

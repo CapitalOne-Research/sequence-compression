@@ -1,7 +1,9 @@
 """Tests for the bp (bit-packing) encoding/decoding pair."""
 
-from c1.aiml.compression.encoding.schemes.bp_encoding import encode
-from c1.aiml.compression.decoding.schemes.bp_decoding import decode
+import pytest
+
+from seqpack.encoding.schemes.bp_encoding import encode
+from seqpack.decoding.schemes.bp_decoding import decode
 
 
 class TestBpRoundTrip:
@@ -40,3 +42,9 @@ class TestBpRoundTrip:
         values = [0, 1, 2, 3]
         encoded, _ = encode(values, bits_per_value=4)
         assert decode(encoded) == values
+
+    def test_value_requiring_64_bits_raises_instead_of_corrupting(self):
+        # Previously this silently sign-flipped to a negative number instead
+        # of raising -- a value needing 64 bits after FOR subtraction.
+        with pytest.raises(ValueError, match="between 0 and 63"):
+            encode([0, 2**63 + 1, 5])

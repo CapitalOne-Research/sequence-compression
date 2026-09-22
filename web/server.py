@@ -3,7 +3,7 @@
 Compression Playground — local HTTP server.
 
 A thin shell that hands files to the existing
-`c1.aiml.compression.encoding.feature_encode.encode_feature_df` and serves
+`seqpack.encoding.feature_encode.encode_feature_df` and serves
 results to the editorial UI under `web/`. There is no encoding logic here —
 this is purely transport.
 
@@ -28,14 +28,14 @@ import pandas as pd
 import tornado.ioloop
 import tornado.web
 
-from c1.aiml.compression.encoding.feature_encode import encode_feature_df
-from c1.aiml.compression.encoding.auto_encode import _infer_list_type, auto_encode, validate_pipeline
-from c1.aiml.compression.decoding.schemes.quant_decoding import decode as quant_decode
-from c1.aiml.compression.decoding.schemes.tbqm_decoding import decode as tbqm_decode
-from c1.aiml.compression.decoding.schemes.tbqp_decoding import decode as tbqp_decode
-from c1.aiml.compression.utils.lookup import DECODE_PARAMS, DECODING_SCHEMES, ENCODING_SCHEMES
-from c1.aiml.compression.utils.metrics import quantization_loss
-from c1.aiml.compression.utils.sizing import get_json_byte_size, _ensure_list
+from seqpack.encoding.feature_encode import encode_feature_df
+from seqpack.encoding.auto_encode import _infer_list_type, auto_encode, validate_pipeline
+from seqpack.decoding.schemes.quant_decoding import decode as quant_decode
+from seqpack.decoding.schemes.tbqm_decoding import decode as tbqm_decode
+from seqpack.decoding.schemes.tbqp_decoding import decode as tbqp_decode
+from seqpack.utils.lookup import DECODE_PARAMS, DECODING_SCHEMES, ENCODING_SCHEMES
+from seqpack.utils.metrics import quantization_loss
+from seqpack.utils.sizing import get_json_byte_size, _ensure_list
 
 WEB_DIR = Path(__file__).resolve().parent
 LOG = logging.getLogger("playground")

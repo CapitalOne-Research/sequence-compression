@@ -1,7 +1,7 @@
 """Tests for the stl (sentinel) encoding/decoding pair."""
 
-from c1.aiml.compression.encoding.schemes.stl_encoding import encode
-from c1.aiml.compression.decoding.schemes.stl_decoding import decode
+from seqpack.encoding.schemes.stl_encoding import encode
+from seqpack.decoding.schemes.stl_decoding import decode
 
 
 class TestStlRoundTrip:
@@ -34,5 +34,25 @@ class TestStlRoundTrip:
 
     def test_multiple_distinct_sentinel_values(self):
         values = [50, 50, -1, 50, 50, -1, 50, 999, 50, 50]
+        encoded, aux = encode(values)
+        assert decode(encoded, **aux) == values
+
+    def test_strips_float_sentinel(self):
+        values = [5.0] * 60 + [999.5] * 30 + [5.0] * 60
+        encoded, aux = encode(values)
+        assert "snt_ranges" in aux
+        assert decode(encoded, **aux) == values
+
+    def test_strips_integer_valued_float_sentinel(self):
+        # Sentinel value happens to be integral (999.0) but the sequence
+        # is float-typed — the decoded value must stay a float, not int.
+        values = [5.0] * 60 + [999.0] * 30 + [5.0] * 60
+        encoded, aux = encode(values)
+        decoded = decode(encoded, **aux)
+        assert decoded == values
+        assert all(isinstance(v, float) for v in decoded)
+
+    def test_multiple_distinct_float_sentinel_values(self):
+        values = [50.5, 50.5, -1.5, 50.5, 50.5, -1.5, 50.5, 999.5, 50.5, 50.5]
         encoded, aux = encode(values)
         assert decode(encoded, **aux) == values

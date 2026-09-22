@@ -1,6 +1,10 @@
-# sequence-compression
+# seqpack
 
-A Python library for compressing feature sequences (lists of values) into compact JSON-serializable representations. Built for the Recommender Systems team; supports both a pandas path (single-machine) and a PySpark path (distributed).
+[![PyPI](https://img.shields.io/pypi/v/seqpack.svg)](https://pypi.org/project/seqpack/)
+[![Python versions](https://img.shields.io/pypi/pyversions/seqpack.svg)](https://pypi.org/project/seqpack/)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+
+A Python library for compressing feature sequences (lists of values) into compact JSON-serializable representations. Supports both a pandas path (single-machine) and a PySpark path (distributed).
 
 ## Overview
 
@@ -10,32 +14,49 @@ Each feature column holds a list of values (integers, floats, strings, or boolea
 
 ```bash
 # Core library only (no Spark)
-pip install .
+pip install seqpack
 
 # + PySpark support
-pip install '.[spark]'
+pip install 'seqpack[spark]'
 
 # + web server (tornado)
-pip install '.[web]'
+pip install 'seqpack[web]'
 
 # + dev/test tools (pytest, plotly)
-pip install '.[dev]'
+pip install 'seqpack[dev]'
 
 # Everything
-pip install '.[spark,web,dev]'
+pip install 'seqpack[spark,web,dev]'
 ```
 
-For local development (editable install):
+For local development, clone the repo and install it editable instead:
 
 ```bash
+git clone https://github.com/CapitalOne-Research/sequence-compression.git
+cd sequence-compression
 pip install -e '.[spark,web,dev]'
+```
+
+## Running the tests
+
+```bash
+pip install -e '.[dev]'
+python -m pytest tests/ -q
+```
+
+Tests requiring PySpark or Hypothesis skip cleanly if those extras aren't
+installed. Linting and type-checking:
+
+```bash
+python -m ruff check seqpack/
+python -m ruff format --check seqpack/
+python -m mypy seqpack/
 ```
 
 ## Quick start
 
 ```python
-from c1.aiml.compression.encoding.feature_encode import encode_feature_df, encode_feature_payload
-from c1.aiml.compression.decoding.feature_decode import decode_feature_payload
+from seqpack import encode_feature_df, encode_feature_payload, decode_feature_payload
 
 encoding_schema = {
     "item_ids":    "cat_rle_bp",   # fixed pipeline
@@ -162,7 +183,9 @@ Run-length encoding compresses sequences that contain long consecutive runs of t
 
 Some numeric sequences contain a small number of extreme outlier values — sentinel-like "null" markers such as `-9999` or `0` — mixed in with a tight cluster of regular values. Those outliers inflate the value range and force downstream bit-packers to allocate many more bits per element for the entire sequence. Sentinel encoding identifies these outliers using an IQR fence: any value beyond `median ± iqr_factor * IQR` (default `iqr_factor=3.0`) is classified as a sentinel; for nearly-constant data it falls back to `median ± 1`. The sentinels are stripped out, leaving a clean sequence with a much narrower range, and their original positions are recorded as compact integer ranges in auxiliary info (`snt_ranges`). The decoder splices the sentinels back in at those positions to reconstruct the original sequence exactly. If no values exceed the fence, the sequence is returned unchanged.
 
-- **Auxiliary info**: `snt_ranges` — `{value: [[start, end], ...]}` of sentinel positions (single-element ranges stored as `[pos]`); `length` — original sequence length
+- **Auxiliary info**: two shapes, depending on whether sentinels were found —
+  when none are found: `snt_pos` (always `[]`) and `length`;
+  when sentinels are found: `snt_ranges` — `{value: [[start, end], ...]}` of sentinel positions (single-element ranges stored as `[pos]`) — and `length`, the original sequence length.
 - **Common pairings**: `stl_bp`
 
 ---
@@ -230,7 +253,7 @@ encoded_df = encode_feature_df(df, encoding_schema)
 - Terminal packers (`bm`, `bp`, `nbp`) cannot have children.
 - Pruning is structural only — the search continues through transient size increases (e.g. `cat` alone is larger than its input, but `cat_rle_bp` may be much smaller).
 - In `encode_feature_df`, `"auto"` is resolved per row, so different rows of the same column may end up with different concrete pipelines.
-- Pass `allow_lossy=True` to `auto_encode()` directly to include `quant` in the search.
+- Lossy schemes (`quant`, `tbqm`, `tbqp`) are included by default. Pass `lossy=False` to `auto_encode()` (or `encode_feature_df`/`encode_feature_payload`) to restrict the search to lossless schemes only.
 
 ---
 
@@ -259,7 +282,7 @@ Example output for a payload with one feature:
 ### Encoding
 
 ```python
-from c1.aiml.compression.encoding.feature_encode import (
+from seqpack import (
     encode_feature_df,       # encode a whole DataFrame
     encode_feature_payload,  # encode a single dict
     encode_feature,          # encode a single value with a fixed pipeline
@@ -285,12 +308,30 @@ encoded = encode_feature_payload({"item_ids": [1, 2, 3]})
 ### Decoding
 
 ```python
-from c1.aiml.compression.decoding.feature_decode import (
+from seqpack import (
     decode_feature_payload,  # decode a dict produced by encode_feature_payload
     decode_feature,          # decode a single encoded value
 )
 
 decoded = decode_feature_payload(encoded_payload)
+```
+
+### Errors
+
+All exceptions raised by the public API derive from `seqpack.SeqPackError`, and
+each concrete exception also subclasses the builtin it replaces (`TypeError`
+or `ValueError`), so existing `except ValueError`/`except TypeError` code
+keeps working unchanged:
+
+```python
+from seqpack import SeqPackError, InvalidInputError, UnknownSchemeError, DecodingError
+
+try:
+    encode_feature_payload(payload, {"item_ids": "not_a_real_scheme"})
+except SeqPackError as exc:
+    ...  # InvalidInputError: bad argument type/shape
+         # UnknownSchemeError: unrecognized pipeline step
+         # DecodingError: malformed wire-format record
 ```
 
 ---
@@ -300,7 +341,7 @@ decoded = decode_feature_payload(encoded_payload)
 ### Encoding
 
 ```python
-from c1.aiml.compression.encoding.spark_feature_encode import encode_feature_dataframe
+from seqpack.encoding.spark_feature_encode import encode_feature_dataframe
 
 schema = {"feature_a": "cat_bp", "feature_b": ["rle", "bp"]}
 
@@ -314,7 +355,7 @@ encoded_spark_df = encode_feature_dataframe(spark_df, schema, metrics=True)
 ### Decoding
 
 ```python
-from c1.aiml.compression.decoding.spark_feature_decode import decode_feature_dataframe
+from seqpack.decoding.spark_feature_decode import decode_feature_dataframe
 
 # Auto-detect all _enc columns and decode them
 decoded_spark_df = decode_feature_dataframe(encoded_spark_df)
@@ -336,7 +377,7 @@ decoded_spark_df = decode_feature_dataframe(encoded_spark_df, drop_originals=Fal
 ### Encoding distribution
 
 ```python
-from c1.aiml.compression.utils.metrics import encoding_counter, encoding_counter_spark
+from seqpack.utils.metrics import encoding_counter, encoding_counter_spark
 
 # pandas — returns a DataFrame: rows = features, columns = scheme codes
 counts = encoding_counter(encoded_df)
@@ -348,7 +389,7 @@ counts = encoding_counter_spark(encoded_spark_df)
 ### Compression metrics (Spark)
 
 ```python
-from c1.aiml.compression.utils.metrics import print_compression_metrics
+from seqpack.utils.metrics import print_compression_metrics
 
 # Requires metrics=True when encoding
 print_compression_metrics(encoded_spark_df)
@@ -359,7 +400,7 @@ print_compression_metrics(encoded_spark_df)
 ### Quantization loss
 
 ```python
-from c1.aiml.compression.utils.metrics import quantization_loss
+from seqpack.utils.metrics import quantization_loss
 
 metrics = quantization_loss(original_floats, reconstructed_floats)
 # Returns: mae, max_ae, rmse, mre, snr_db, cosine_sim
@@ -368,12 +409,12 @@ metrics = quantization_loss(original_floats, reconstructed_floats)
 ### Latency benchmarking
 
 ```python
-from c1.aiml.compression.utils.benchmark import run_benchmark
+from seqpack.utils.benchmark import run_benchmark
 
 raw_results, agg, fig = run_benchmark(
     df,
     encoding_schema={"feature_a": "cat_rle_bp", "feature_b": ["rle", "bp"]},
-    output_dir="./benchmark_output",  # saves HTML + PNG charts
+    output_dir="./benchmark_output",  # saves HTML always; PNG requires kaleido (pip install kaleido)
     percentiles=[75, 95, 99],         # default
 )
 # Prints a summary table and produces a plotly bar chart comparing
@@ -385,7 +426,7 @@ raw_results, agg, fig = run_benchmark(
 The benchmark module exposes lower-level functions for custom workflows:
 
 ```python
-from c1.aiml.compression.utils.benchmark import (
+from seqpack.utils.benchmark import (
     benchmark_dataframe,   # raw latency measurements per feature × row × scheme
     aggregate_results,     # aggregate into per-scheme summary DataFrame
     plot_results,          # produce plotly figure from aggregated results
@@ -408,11 +449,13 @@ pip install '.[web]'
 **Run** from the repo root:
 
 ```bash
-python -m web.server        # defaults to port 8765
+python -m web.server        # defaults to port 8888
 python -m web.server 9000   # custom port
 ```
 
-Then open `http://localhost:8765/`.
+Then open `http://localhost:8888/`.
+
+Note: `web/` is excluded from the packaged distribution (see `pyproject.toml`), so this only works from a source checkout, not from an installed wheel.
 
 ### Pages
 
@@ -432,7 +475,7 @@ Then open `http://localhost:8765/`.
 ## Repository structure
 
 ```
-c1/aiml/compression/
+seqpack/
 ├── encoding/
 │   ├── feature_encode.py        # encode_feature_df, encode_feature_payload
 │   ├── spark_feature_encode.py  # encode_feature_dataframe (Spark)
@@ -445,7 +488,9 @@ c1/aiml/compression/
 │       ├── nbp_encoding.py
 │       ├── quant_encoding.py
 │       ├── rle_encoding.py
-│       └── stl_encoding.py
+│       ├── stl_encoding.py
+│       ├── tbqm_encoding.py
+│       └── tbqp_encoding.py
 ├── decoding/
 │   ├── feature_decode.py        # decode_feature_payload, decode_feature
 │   ├── spark_feature_decode.py  # decode_feature_dataframe (Spark)
@@ -456,8 +501,16 @@ c1/aiml/compression/
 │   ├── benchmark.py             # run_benchmark, benchmark_dataframe, aggregate_results, plot_results
 │   ├── bitpack.py               # pack_bits, encode_count, encode_signed_varint
 │   ├── lookup.py                # ENCODING_SCHEMES, DECODING_SCHEMES registries
-│   └── spark_udfs.py            # PySpark Pandas UDFs
+│   ├── spark_udfs.py            # PySpark Pandas UDFs
+│   ├── qjl.py                   # QJL projection for tbqp
+│   ├── turbo_quant_codebook.py  # Lloyd-Max codebooks for tbqm/tbqp
+│   ├── turbo_quant_config.py    # TurboQuantConfig dataclass
+│   └── turbo_quant_rotation.py  # seeded random rotation matrices
+├── wire.py                      # EncodedEntry: the shared wire-format container
+├── exceptions.py                # SeqPackError hierarchy
+├── __init__.py                  # public re-exports, __version__
 └── encoding_schemes.md          # full scheme reference with encoded record details
+tests/                           # pytest suite, one file per scheme plus integration tests
 web/
 ├── server.py                    # Tornado backend
 ├── index.html + app.js          # Encoder page
@@ -467,3 +520,23 @@ web/
 ├── sample_datasets/             # Sample parquet files for the UI
 └── styles.css                   # Shared styles
 ```
+
+---
+
+## Contributing
+
+Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) for dev setup, how to
+run the test/lint/type-check suite, and how to add a new encoding scheme.
+
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for release notes.
+
+## Security
+
+See [SECURITY.md](SECURITY.md) to report a vulnerability.
+
+## License
+
+Apache License 2.0 — see [LICENSE](LICENSE) and [NOTICE](NOTICE).
+

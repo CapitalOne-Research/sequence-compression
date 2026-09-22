@@ -3,12 +3,12 @@
 import numpy as np
 import pytest
 
-from c1.aiml.compression.encoding.feature_encode import encode_feature
-from c1.aiml.compression.decoding.feature_decode import decode_feature
-from c1.aiml.compression.decoding.schemes.tbqm_decoding import decode as tbqm_decode
-from c1.aiml.compression.decoding.schemes.tbqp_decoding import decode as tbqp_decode
-from c1.aiml.compression.encoding.schemes.tbqm_encoding import encode as tbqm_encode
-from c1.aiml.compression.encoding.schemes.tbqp_encoding import encode as tbqp_encode
+from seqpack.encoding.feature_encode import encode_feature
+from seqpack.decoding.feature_decode import decode_feature
+from seqpack.decoding.schemes.tbqm_decoding import decode as tbqm_decode
+from seqpack.decoding.schemes.tbqp_decoding import decode as tbqp_decode
+from seqpack.encoding.schemes.tbqm_encoding import encode as tbqm_encode
+from seqpack.encoding.schemes.tbqp_encoding import encode as tbqp_encode
 
 
 def _rmse(a, b):
@@ -113,5 +113,5 @@ def test_tbqp_bp_pipeline_round_trip():
 
 def test_short_vector_not_encoded_via_pipeline():
     x = [0.5, -0.5]
-    with pytest.raises((ValueError, Exception)):
+    with pytest.raises(ValueError, match="length"):
         tbqm_encode(x)

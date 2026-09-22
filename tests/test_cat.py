@@ -1,7 +1,7 @@
 """Tests for the cat (categorical) encoding/decoding pair."""
 
-from c1.aiml.compression.encoding.schemes.cat_encoding import encode
-from c1.aiml.compression.decoding.schemes.cat_decoding import decode
+from seqpack.encoding.schemes.cat_encoding import encode
+from seqpack.decoding.schemes.cat_decoding import decode
 
 
 class TestCatRoundTrip:
