@@ -12,15 +12,19 @@
 /* Pipeline colours. Assigned in order of how many users a pipeline wins, so
    the most common pipeline in any column is always the accent teal. */
 :root {
-  --pl-0: #0E5570;
-  --pl-1: #D08A2E;
-  --pl-2: #6B8F3A;
-  --pl-3: #8A5BA8;
-  --pl-4: #B8514A;
-  --pl-5: #4F9BB5;
-  --pl-6: #8C7A5B;
-  --pl-7: #5C636B;
+  /* validated categorical order (adjacent CVD ΔE ≥ 9, normal-vision ΔE ≥ 19) */
+  --pl-0: #2a78d6;
+  --pl-1: #eb6834;
+  --pl-2: #1baf7a;
+  --pl-3: #eda100;
+  --pl-4: #e87ba4;
+  --pl-5: #008300;
+  --pl-6: #4a3aa7;
+  --pl-7: #e34948;
   --pl-none: #D5DAE0;
+  /* per-user chart: the single pipeline is the recessive baseline */
+  --viz-fixed: #C5CAD2;
+  --viz-auto: var(--accent);
 }
 
 .au-body { font-size: 14px; line-height: 1.65; color: var(--ink-soft); max-width: 72ch; }
@@ -202,6 +206,9 @@
   padding: 14px 16px 16px;
   cursor: pointer;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
 }
 .au-card:hover { border-color: var(--border-strong); border-top-color: var(--card-color); }
 .au-card:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
@@ -220,6 +227,53 @@
 .au-bar-row.auto .au-bar-fill { background: var(--accent); }
 .au-bar-value { font-size: 13px; text-align: right; font-feature-settings: 'tnum'; color: var(--ink); }
 .au-savings-note { margin-top: 20px; }
+.au-compare { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 32px 48px; max-width: 1080px; }
+.au-compare-title { font-size: 14px; font-weight: 600; color: var(--ink); margin: 0 0 12px; }
+.au-compare .au-bar-row { grid-template-columns: 150px minmax(0, 1fr) 72px; gap: 12px; }
+.au-switch { margin-top: 4px; }
+
+/* per-user chart */
+.au-tail { margin-top: 44px; max-width: 1080px; }
+.au-tail-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 24px; margin-bottom: 10px; }
+.au-tail-title { font-size: 14px; font-weight: 600; color: var(--ink); margin: 0; }
+.au-tail-legend { display: flex; gap: 18px; font-size: 12px; color: var(--muted); }
+.au-tail-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.au-tail-legend i { width: 12px; height: 12px; border-radius: 2px; display: inline-block; }
+.au-tail-plot { position: relative; }
+.au-tail-plot svg { display: block; width: 100%; overflow: visible; }
+.au-tail-plot text { font-family: 'IBM Plex Sans', sans-serif; font-size: 11px; fill: var(--muted); }
+.au-tail-plot .ref-label { fill: var(--ink-soft); font-weight: 500; }
+.au-tail-plot .hit { fill: transparent; cursor: pointer; }
+.au-tail-plot .hit:hover, .au-tail-plot .hit.active { fill: rgba(15, 17, 21, 0.05); }
+.au-tip {
+  position: absolute;
+  pointer-events: none;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-3);
+  padding: 8px 10px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ink);
+  white-space: nowrap;
+  z-index: 5;
+}
+.au-tip .muted { color: var(--muted); }
+.au-tip-row { display: flex; align-items: center; gap: 6px; font-feature-settings: 'tnum'; }
+.au-tip-row i { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
+.au-tail-caption { font-size: 12px; color: var(--muted); margin: 8px 0 0; }
+.au-table-toggle { margin-top: 14px; font-size: 13px; }
+.au-table-toggle summary { cursor: pointer; color: var(--accent); }
+.au-table-wrap { max-height: 320px; overflow: auto; margin-top: 10px; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--surface); }
+.au-table { width: 100%; border-collapse: collapse; font-size: 12.5px; font-feature-settings: 'tnum'; }
+.au-table th, .au-table td { padding: 6px 12px; text-align: right; border-bottom: 1px solid var(--rule); }
+.au-table th:nth-child(-n+3), .au-table td:nth-child(-n+3) { text-align: left; }
+.au-table th { position: sticky; top: 0; background: var(--surface-alt); font-weight: 500; color: var(--muted); }
+
+.au-profile { font-size: 12.5px; color: var(--ink-soft); background: var(--accent-tint); border-radius: var(--r-sm); padding: 8px 10px; margin: 12px 0 0; }
+.au-profile b { font-weight: 600; }
+.au-synth-tag { font-family: 'IBM Plex Sans', sans-serif; font-size: 10.5px; color: var(--muted); margin-left: 4px; }
 
 /* ── §03 search ────────────────────────────────────────────────── */
 .au-search { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 40px; align-items: start; }
@@ -232,7 +286,7 @@
 .au-status.error { color: var(--neg); }
 
 @media (max-width: 1100px) {
-  .au-intro, .au-explorer, .au-search { grid-template-columns: minmax(0, 1fr); }
+  .au-intro, .au-explorer, .au-search, .au-compare { grid-template-columns: minmax(0, 1fr); }
   .au-explorer { gap: 28px; }
   .au-grid-wrap { max-width: 440px; }
 }
@@ -365,7 +419,7 @@ encoded = encode_feature_df(df, {
         <div class="au-grid-wrap">
           <div class="au-grid" id="auGrid" role="group" aria-label="Users, coloured by the pipeline auto chose"></div>
           <p class="au-grid-caption">
-            Each square is one user from the KuaiRand demo sample. Select a
+            Each square is <span id="auGridSource">one user from the KuaiRand demo sample</span>. Select a
             square to see that user's sequence, or a pipeline below to highlight
             its users.
           </p>
@@ -388,14 +442,54 @@ encoded = encode_feature_df(df, {
   <div class="section-num">§ 02.</div>
   <h2 class="section-title">Per user beats <em>one size fits all</em></h2>
   <div class="section-body">
-    <p class="au-body" id="auSavingsLede">
-      Total bytes for the selected feature across all users, compared with
-      forcing a single pipeline onto every row. The single pipeline is the best
-      of the ones auto picked anywhere in the column; rows it can't encode, or
-      doesn't shrink, fall back to raw, just as <code>encode_feature</code> does.
-    </p>
-    <div class="au-bars" id="auBars"></div>
+    <div class="au-body">
+      <p>
+        A single pipeline is tuned to the typical user. When a feature mixes
+        users whose data follows different distributions, or a few users carry
+        outliers, that pipeline fits the rest badly, and those users become the
+        largest rows in the column. Because auto decides per user, it can give
+        just those users a different pipeline.
+      </p>
+      <p id="auSavingsLede">
+        The single pipeline below is the best, by total size, of the pipelines
+        auto picked anywhere in the column. Rows it can't encode, or doesn't
+        shrink, stay raw, just as <code>encode_feature</code> does.
+      </p>
+      <p class="au-switch hidden" id="auSwitchWrap">
+        <button class="btn-secondary" id="auSwitchBtn">Show a feature with mixed users and outliers</button>
+      </p>
+    </div>
+
+    <div class="au-compare">
+      <div>
+        <h3 class="au-compare-title">Total across all users</h3>
+        <div class="au-bars" id="auBars"></div>
+      </div>
+      <div>
+        <h3 class="au-compare-title">Largest single user</h3>
+        <div class="au-bars" id="auMaxBars"></div>
+      </div>
+    </div>
     <p class="au-body au-savings-note" id="auSavingsNote"></p>
+
+    <div class="au-tail" id="auTail">
+      <div class="au-tail-head">
+        <h3 class="au-tail-title" id="auTailTitle">Every user's encoded size</h3>
+        <div class="au-tail-legend" aria-hidden="true">
+          <span><i style="background:var(--viz-fixed)"></i><span id="auTailFixedName">one pipeline</span></span>
+          <span><i style="background:var(--viz-auto)"></i>auto, per user</span>
+        </div>
+      </div>
+      <div class="au-tail-plot" id="auTailPlot"></div>
+      <p class="au-tail-caption">
+        Users are sorted by their size under the single pipeline, largest first.
+        Hover a column for details, or select it to open that user above.
+      </p>
+      <details class="au-table-toggle">
+        <summary>Show as a table</summary>
+        <div class="au-table-wrap"><table class="au-table" id="auTailTable"></table></div>
+      </details>
+    </div>
   </div>
 </section>
 

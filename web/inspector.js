@@ -45,7 +45,7 @@ const PRESETS = {
 };
 
 const state = {
-  pipeline: ['cat', 'rle', 'bp'],
+  pipeline: ['auto'],
   lossy: true,
 };
 

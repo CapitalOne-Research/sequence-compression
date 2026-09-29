@@ -20,6 +20,7 @@ import json
 import logging
 import sys
 import os
+import random
 import time
 from collections import OrderedDict
 from pathlib import Path
@@ -887,6 +888,81 @@ def _sequence_traits(values: list) -> dict:
     }
 
 
+# A synthetic feature appended to the demo data for the auto page. Real
+# features rarely show it this cleanly: one column mixing users whose data
+# follows different distributions, plus a few rows hit by a logging sentinel.
+# Any one pipeline fits some users and inflates the rest; the outlier rows
+# become the column's largest entries.
+SYNTHETIC_COLUMN = "synthetic_watch_ms"
+_SENTINEL = 2**31 - 1
+_SYNTHETIC_PROFILES = {
+    "skimmer": "Scrolls past almost everything: mostly 0 ms, with a few short watches.",
+    "binger":  "Autoplay loops the same clip, so the same watch time repeats in long runs.",
+    "steady":  "Watches most videos for a varied 1 to 60 seconds.",
+    "glitch":  f"Steady watcher, but the logger wrote the sentinel {_SENTINEL:,} for a few open sessions.",
+}
+
+
+def _synthetic_watch_ms(n_users: int, seed: int = 7) -> tuple[list[list[int]], list[str]]:
+    """Per-user watch-time sequences drawn from four profiles (deterministic)."""
+    rng = random.Random(seed)
+    rows, profiles = [], []
+    for _ in range(n_users):
+        n = rng.randint(300, 500)
+        r = rng.random()
+        if r < 0.40:
+            values = [0] * n
+            for i in rng.sample(range(n), max(1, n // 25)):
+                values[i] = rng.randint(500, 8000)
+            profile = "skimmer"
+        elif r < 0.65:
+            values = []
+            while len(values) < n:
+                values += [rng.choice([15000, 30000, 45000, 60000])] * rng.randint(20, 80)
+            values = values[:n]
+            profile = "binger"
+        else:
+            values = [rng.randint(1000, 60000) for _ in range(n)]
+            profile = "steady"
+            if r >= 0.85:
+                for i in rng.sample(range(n), rng.randint(2, 6)):
+                    values[i] = _SENTINEL
+                profile = "glitch"
+        rows.append(values)
+        profiles.append(profile)
+    return rows, profiles
+
+
+_AUTO_DEMO: dict = {}
+
+
+def _auto_demo_df() -> tuple[pd.DataFrame, list[str]] | None:
+    """The demo dataset plus the synthetic column, built once."""
+    if "df" not in _AUTO_DEMO:
+        path = DefaultDatasetHandler._SAMPLE_PATH
+        if not path.exists():
+            return None
+        _, base = _get_df(path.read_bytes(), path.name)
+        df = base.copy()
+        rows, profiles = _synthetic_watch_ms(len(df))
+        df[SYNTHETIC_COLUMN] = rows
+        _AUTO_DEMO["df"], _AUTO_DEMO["profiles"] = df, profiles
+    return _AUTO_DEMO["df"], _AUTO_DEMO["profiles"]
+
+
+def _stl_outliers(values: list) -> dict | None:
+    """Which values `stl` sets aside, for explaining an stl-first pipeline."""
+    try:
+        _, aux = ENCODING_SCHEMES["stl"].encode(values)
+    except (ValueError, TypeError):
+        return None
+    ranges = aux.get("snt_ranges") or {}
+    if not ranges:
+        return None
+    count = sum((r[-1] - r[0] + 1) for spans in ranges.values() for r in spans)
+    return {"count": count, "values": list(ranges)[:3]}
+
+
 class AutoRowsHandler(_JsonHandler):
     """Run `auto_encode` on every row of one demo-dataset column.
 
@@ -894,14 +970,15 @@ class AutoRowsHandler(_JsonHandler):
     user), so one feature column can carry several different pipelines. Also
     compares the per-row result against forcing any single pipeline auto
     picked onto every row, with the usual raw fallback when it doesn't help.
+    Also serves `SYNTHETIC_COLUMN`, a mixed-distribution feature with outliers.
     """
 
     def get(self):
-        path = DefaultDatasetHandler._SAMPLE_PATH
-        if not path.exists():
+        demo = _auto_demo_df()
+        if demo is None:
             self.set_status(404)
             return self.finish(json.dumps({"error": "sample dataset not found"}))
-        _, df = _get_df(path.read_bytes(), path.name)
+        df, profiles = demo
 
         list_columns = [
             c for c in df.columns
@@ -911,6 +988,7 @@ class AutoRowsHandler(_JsonHandler):
         if column is None:
             return self.finish(json.dumps({
                 "columns": list_columns,
+                "synthetic": SYNTHETIC_COLUMN,
                 "default": _AUTO_DEFAULT_COLUMN if _AUTO_DEFAULT_COLUMN in list_columns else list_columns[0],
                 "row_count": len(df),
             }))
@@ -954,6 +1032,10 @@ class AutoRowsHandler(_JsonHandler):
                 "enc_bytes": enc_bytes,
                 "traits": _sequence_traits(values),
             })
+            if scheme.startswith("stl"):
+                rows[-1]["traits"]["outliers"] = _stl_outliers(values)
+            if column == SYNTHETIC_COLUMN:
+                rows[-1]["profile"] = profiles[i]
         elapsed_ms = (time.perf_counter() - start) * 1000
 
         # Each pipeline auto chose anywhere in the column, forced onto every
@@ -961,13 +1043,19 @@ class AutoRowsHandler(_JsonHandler):
         # `encode_feature` fallback.
         fixed = []
         for pipeline in (s for s in breakdown if s):
-            total = 0
+            sizes = []
             for i, cell in enumerate(df[column]):
                 values = _ensure_list(cell) if isinstance(cell, list) else []
                 size = _run_pipeline(values, pipeline)
-                total += min(size, rows[i]["orig_bytes"]) if size is not None else rows[i]["orig_bytes"]
-            fixed.append({"scheme": pipeline, "bytes": total})
+                orig = rows[i]["orig_bytes"]
+                sizes.append(min(size, orig) if size is not None else orig)
+            fixed.append({"scheme": pipeline, "bytes": sum(sizes), "max_bytes": max(sizes), "sizes": sizes})
         fixed.sort(key=lambda f: f["bytes"])
+        # Per-row sizes only for the best one; the page compares against it.
+        for i, size in enumerate(fixed[0]["sizes"] if fixed else []):
+            rows[i]["fixed_bytes"] = size
+        for f in fixed:
+            del f["sizes"]
 
         self.finish(json.dumps({
             "column": column,
@@ -982,7 +1070,10 @@ class AutoRowsHandler(_JsonHandler):
             "totals": {
                 "original": sum(r["orig_bytes"] for r in rows),
                 "auto": sum(r["enc_bytes"] for r in rows),
+                "max_original": max((r["orig_bytes"] for r in rows), default=0),
+                "max_auto": max((r["enc_bytes"] for r in rows), default=0),
             },
+            "profiles": _SYNTHETIC_PROFILES if column == SYNTHETIC_COLUMN else None,
             "fixed": fixed,
         }, default=str))
 

@@ -58,3 +58,29 @@ class TestAutoRows(AsyncHTTPTestCase):
         self.get_json("/api/auto-rows?column=nope", status=400)
         self.get_json("/api/auto-rows?column=is_like&row=-1", status=400)
         self.get_json("/api/auto-rows?column=is_like&row=100000", status=400)
+
+    def test_synthetic_column_shrinks_largest_row(self):
+        meta = self.get_json("/api/auto-rows")
+        column = meta["synthetic"]
+        assert column in meta["columns"]
+
+        body = self.get_json(f"/api/auto-rows?column={column}")
+        assert set(body["profiles"]) == {"skimmer", "binger", "steady", "glitch"}
+        assert {r["profile"] for r in body["rows"]} == set(body["profiles"])
+
+        # The glitch users get stl, and stl explains which values it set aside.
+        stl_rows = [r for r in body["rows"] if r["scheme"].startswith("stl")]
+        assert stl_rows and all(r["profile"] == "glitch" for r in stl_rows)
+        assert all(r["traits"]["outliers"]["count"] > 0 for r in stl_rows)
+
+        # Per user, auto never loses to the best single pipeline, and it
+        # shrinks the column's largest row, not just its total.
+        best = body["fixed"][0]
+        assert all(r["enc_bytes"] <= r["fixed_bytes"] for r in body["rows"])
+        assert body["totals"]["auto"] < best["bytes"]
+        assert body["totals"]["max_auto"] < best["max_bytes"] * 0.75
+
+    def test_synthetic_column_is_deterministic(self):
+        a, _ = server._synthetic_watch_ms(20)
+        b, _ = server._synthetic_watch_ms(20)
+        assert a == b

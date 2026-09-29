@@ -2235,6 +2235,20 @@ hr { border: none; border-top: 1px solid var(--border); }
   overflow-x: auto;
   color: var(--ink);
 }
+/* Cap long per-stage listings (e.g. del over thousands of values) so a
+   single stage can't take over the page; the block scrolls instead. */
+.pg-values,
+.pg-dict,
+.pg-delta-list,
+.pg-stl,
+.pg-aux,
+.pg-base64 {
+  max-height: 320px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.pg-stl > *,
+.pg-aux > * { flex-shrink: 0; }
 .pg-meta {
   font-family: 'IBM Plex Mono', monospace;
   font-size: 11px;
