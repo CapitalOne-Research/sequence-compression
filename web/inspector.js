@@ -1358,11 +1358,39 @@ function init() {
     state.lossy = e.target.checked;
   });
 
-  // load default preset
-  document.getElementById('pgInput').value = JSON.stringify(PRESETS.categorical);
+  // A sequence handed over from another page (e.g. auto-encoding.html) as
+  // `#values=<json>&pipeline=<a_b_c>`; otherwise load the default preset.
+  const handoff = readHandoff();
+  document.getElementById('pgInput').value = JSON.stringify(handoff ? handoff.values : PRESETS.categorical);
+  if (handoff) {
+    state.pipeline = handoff.pipeline;
+    state.lossy = handoff.lossy;
+    document.getElementById('pgLossyToggle').checked = handoff.lossy;
+  }
   renderChips();
   updateInputMeta();
-  updateStatus('IDLE', 'feature sequence loaded · adjust pipeline and run');
+  if (handoff) {
+    runSteps();
+  } else {
+    updateStatus('IDLE', 'feature sequence loaded · adjust pipeline and run');
+  }
+}
+
+function readHandoff() {
+  try {
+    const params = new URLSearchParams(location.hash.slice(1));
+    const values = JSON.parse(params.get('values') || 'null');
+    if (!Array.isArray(values) || values.length === 0) return null;
+    const pipeline = (params.get('pipeline') || 'auto').split('_')
+      .filter(code => code === 'auto' || code in SCHEME_INFO);
+    return {
+      values,
+      pipeline: pipeline.length === 0 || pipeline.includes('auto') ? ['auto'] : pipeline,
+      lossy: params.get('lossy') !== 'false',
+    };
+  } catch {
+    return null;
+  }
 }
 
 if (document.readyState === 'loading') {

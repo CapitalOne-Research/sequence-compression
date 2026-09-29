@@ -37,8 +37,18 @@
     <a href="/schemes.html" class="nav-link">
       <span class="nav-glyph">✦</span> schemes <span class="nav-arrow">→</span>
     </a>
+    <a href="/auto-encoding.html" class="nav-link">
+      <span class="nav-glyph">✦</span> auto <span class="nav-arrow">→</span>
+    </a>
     <a href="/recsys-use-case.html" class="nav-link">
       <span class="nav-glyph">✦</span> recsys example <span class="nav-arrow">→</span>
+    </a>
+    <span class="nav-sep" aria-hidden="true"></span>
+    <a href="https://dl.acm.org/doi/epdf/10.1145/3773078.3841279" class="nav-link nav-external" target="_blank" rel="noopener noreferrer">
+      paper <span class="nav-arrow">↗</span>
+    </a>
+    <a href="https://github.com/CapitalOne-Research/sequence-compression" class="nav-link nav-external" target="_blank" rel="noopener noreferrer">
+      code <span class="nav-arrow">↗</span>
     </a>
   </nav>
 
@@ -248,7 +258,13 @@
     <div class="output-wire">
       <div class="wire-header">
         <span class="wire-title">Encoded entries · per-feature payload <span class="wire-note">list features shown for user&nbsp;<span class="hot">1</span></span></span>
-        <button id="copyWire" class="btn-tiny">copy</button>
+        <span class="wire-actions">
+          <span class="wire-toggle" role="group" aria-label="payload view">
+            <button class="wire-toggle-btn active" data-view="encoded" aria-pressed="true">encoded</button>
+            <button class="wire-toggle-btn" data-view="uncompressed" aria-pressed="false">uncompressed</button>
+          </span>
+          <button id="copyWire" class="btn-tiny">copy</button>
+        </span>
       </div>
       <pre class="wire-pre" id="wireOutput"></pre>
     </div>

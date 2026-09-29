@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import base64
 
-from seqpack.utils.bitpack import pack_bits
+from seqpack.utils.bitpack import pack_bits, to_int_list
 
 # The count field is packed into 14 bits alongside the header's flag/min-value
 # bits (see byte1 below), so counts above this cannot be represented.
@@ -29,7 +29,7 @@ def encode(values: list[int]) -> tuple[str, dict]:
     if count > BM_MAX_COUNT:
         raise ValueError(f"bm supports at most {BM_MAX_COUNT} values, got {count}")
 
-    values = [int(v) for v in values]
+    values = to_int_list(values, "bm")
     min_val = min(values)
     max_val = max(values)
 

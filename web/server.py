@@ -36,6 +36,8 @@ from seqpack.decoding.schemes.tbqp_decoding import decode as tbqp_decode
 from seqpack.utils.lookup import DECODE_PARAMS, DECODING_SCHEMES, ENCODING_SCHEMES
 from seqpack.utils.metrics import quantization_loss
 from seqpack.utils.sizing import get_json_byte_size, _ensure_list
+from seqpack.encoding.schemes.bm_encoding import BM_MAX_COUNT
+from seqpack.wire import EncodedEntry
 
 WEB_DIR = Path(__file__).resolve().parent
 LOG = logging.getLogger("playground")
@@ -841,6 +843,150 @@ class StepsHandler(_JsonHandler):
         }))
 
 
+# ─── auto page · per-user auto-encoding ─────────────────────────────────
+
+_AUTO_DEFAULT_COLUMN = "is_like"
+
+
+def _run_pipeline(values: list, pipeline: str) -> int | None:
+    """Wire size of `values` after running `pipeline`, or None if it doesn't apply.
+
+    Checked against `validate_pipeline` first: some packers (e.g. `bm`) accept
+    ints outside their domain without raising, which would silently corrupt data.
+    """
+    if validate_pipeline(pipeline, _infer_list_type(values)):
+        return None
+    if pipeline.startswith("bm") and len(values) > BM_MAX_COUNT:
+        return None
+    current, aux = values, {}
+    try:
+        for step in pipeline.split("_"):
+            current, step_aux = ENCODING_SCHEMES[step].encode(current)
+            aux = {**aux, **step_aux}
+    except (ValueError, OverflowError, ZeroDivisionError, TypeError, KeyError):
+        return None
+    return EncodedEntry(current, pipeline, aux).byte_size()
+
+
+def _sequence_traits(values: list) -> dict:
+    """Shape of a sequence that explains which pipeline auto picks for it."""
+    n = len(values)
+    runs = sum(1 for i in range(n) if i == 0 or values[i] != values[i - 1])
+    counts: dict = {}
+    for v in values:
+        counts[_hashable(v)] = counts.get(_hashable(v), 0) + 1
+    dominant, dominant_n = max(counts.items(), key=lambda kv: kv[1]) if counts else (None, 0)
+    numeric = [v for v in values if isinstance(v, (int, float)) and not isinstance(v, bool)]
+    return {
+        "distinct": len(counts),
+        "runs": runs,
+        "dominant": dominant,
+        "dominant_share": dominant_n / n if n else 0,
+        "min": min(numeric) if numeric else None,
+        "max": max(numeric) if numeric else None,
+    }
+
+
+class AutoRowsHandler(_JsonHandler):
+    """Run `auto_encode` on every row of one demo-dataset column.
+
+    Powers `auto-encoding.html`: shows that `auto` is decided per row (per
+    user), so one feature column can carry several different pipelines. Also
+    compares the per-row result against forcing any single pipeline auto
+    picked onto every row, with the usual raw fallback when it doesn't help.
+    """
+
+    def get(self):
+        path = DefaultDatasetHandler._SAMPLE_PATH
+        if not path.exists():
+            self.set_status(404)
+            return self.finish(json.dumps({"error": "sample dataset not found"}))
+        _, df = _get_df(path.read_bytes(), path.name)
+
+        list_columns = [
+            c for c in df.columns
+            if len(df[c].dropna()) and isinstance(df[c].dropna().iloc[0], list)
+        ]
+        column = self.get_query_argument("column", None)
+        if column is None:
+            return self.finish(json.dumps({
+                "columns": list_columns,
+                "default": _AUTO_DEFAULT_COLUMN if _AUTO_DEFAULT_COLUMN in list_columns else list_columns[0],
+                "row_count": len(df),
+            }))
+        if column not in list_columns:
+            self.set_status(400)
+            return self.finish(json.dumps({"error": f"unknown list column: {column!r}"}))
+
+        lossy = self.get_query_argument("lossy", "false").lower() not in ("false", "0", "no")
+
+        # One row's full sequence, fetched when the page opens a user's detail.
+        row_arg = self.get_query_argument("row", None)
+        if row_arg is not None:
+            try:
+                if int(row_arg) < 0:
+                    raise IndexError(row_arg)
+                cell = df[column].iloc[int(row_arg)]
+            except (ValueError, IndexError):
+                self.set_status(400)
+                return self.finish(json.dumps({"error": f"row out of range: {row_arg!r}"}))
+            values = _ensure_list(cell) if isinstance(cell, list) else []
+            _, scheme, _ = auto_encode(values, lossy=lossy)
+            return self.finish(json.dumps({
+                "column": column, "row": int(row_arg), "scheme": scheme, "values": values,
+            }, default=str))
+
+        start = time.perf_counter()
+        rows = []
+        breakdown: dict[str, int] = {}
+        for i, cell in enumerate(df[column]):
+            values = _ensure_list(cell) if isinstance(cell, list) else []
+            orig_bytes = EncodedEntry(values).byte_size()
+            encoded, scheme, aux = auto_encode(values, lossy=lossy)
+            enc_bytes = EncodedEntry(encoded, scheme, aux).byte_size() if scheme else orig_bytes
+            breakdown[scheme] = breakdown.get(scheme, 0) + 1
+            rows.append({
+                "row": i,
+                "length": len(values),
+                "type": _infer_list_type(values),
+                "scheme": scheme,
+                "orig_bytes": orig_bytes,
+                "enc_bytes": enc_bytes,
+                "traits": _sequence_traits(values),
+            })
+        elapsed_ms = (time.perf_counter() - start) * 1000
+
+        # Each pipeline auto chose anywhere in the column, forced onto every
+        # row. Rows it can't encode or doesn't shrink stay raw, matching the
+        # `encode_feature` fallback.
+        fixed = []
+        for pipeline in (s for s in breakdown if s):
+            total = 0
+            for i, cell in enumerate(df[column]):
+                values = _ensure_list(cell) if isinstance(cell, list) else []
+                size = _run_pipeline(values, pipeline)
+                total += min(size, rows[i]["orig_bytes"]) if size is not None else rows[i]["orig_bytes"]
+            fixed.append({"scheme": pipeline, "bytes": total})
+        fixed.sort(key=lambda f: f["bytes"])
+
+        self.finish(json.dumps({
+            "column": column,
+            "lossy": lossy,
+            "row_count": len(rows),
+            "elapsed_ms": round(elapsed_ms, 1),
+            "rows": rows,
+            "breakdown": sorted(
+                ({"scheme": s, "count": n} for s, n in breakdown.items()),
+                key=lambda b: -b["count"],
+            ),
+            "totals": {
+                "original": sum(r["orig_bytes"] for r in rows),
+                "auto": sum(r["enc_bytes"] for r in rows),
+            },
+            "fixed": fixed,
+        }, default=str))
+
+
 class HealthHandler(tornado.web.RequestHandler):
     def get(self):
         self.set_header("Content-Type", "application/json; charset=utf-8")
@@ -900,6 +1046,7 @@ def make_app() -> tornado.web.Application:
         (r"/api/steps", StepsHandler),
         (r"/api/validate", ValidateHandler),
         (r"/api/default-dataset", DefaultDatasetHandler),
+        (r"/api/auto-rows", AutoRowsHandler),
         (r"/(.*)", _NoCacheStatic, {"path": str(WEB_DIR), "default_filename": "index.html"}),
     ], max_buffer_size=MAX_UPLOAD_BYTES + 256 * 1024)
 

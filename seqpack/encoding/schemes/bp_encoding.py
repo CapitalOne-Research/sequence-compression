@@ -8,6 +8,7 @@ from seqpack.utils.bitpack import (
     encode_count,
     encode_signed_varint,
     pack_bits,
+    to_int_list,
 )
 
 # Header flag bits
@@ -30,7 +31,7 @@ def encode(values: list[int], bits_per_value: int | None = None) -> tuple[str, d
     if len(values) == 0:
         return "", {}
 
-    values = [int(v) for v in values]
+    values = to_int_list(values, "bp")
 
     count = len(values)
     min_val = min(values)

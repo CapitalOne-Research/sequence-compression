@@ -183,7 +183,9 @@ hr { border: none; border-top: 1px solid var(--border); }
 .masthead-nav {
   grid-column: 1 / -1;
   display: flex;
+  flex-wrap: wrap;
   justify-content: center;
+  align-items: center;
   gap: 4px;
   margin-top: 24px;
   font-family: 'IBM Plex Sans', sans-serif;
@@ -214,6 +216,12 @@ hr { border: none; border-top: 1px solid var(--border); }
   background: var(--accent-soft);
   color: var(--accent-strong);
   border: 1px solid transparent;
+}
+.nav-sep {
+  width: 1px;
+  height: 16px;
+  margin: 0 8px;
+  background: var(--border);
 }
 .nav-arrow, .nav-glyph {
   font-size: 12px;
@@ -1280,6 +1288,31 @@ hr { border: none; border-top: 1px solid var(--border); }
 }
 .wire-note .hot { color: var(--accent); font-weight: 500; }
 
+.wire-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.wire-toggle {
+  display: inline-flex;
+  border: 1px solid rgba(247, 248, 250, 0.25);
+  border-radius: var(--r-sm);
+  overflow: hidden;
+}
+.wire-toggle-btn {
+  background: transparent;
+  border: 0;
+  color: rgba(247, 248, 250, 0.6);
+  padding: 5px 10px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all var(--t-base) var(--ease);
+}
+.wire-toggle-btn + .wire-toggle-btn { border-left: 1px solid rgba(247, 248, 250, 0.25); }
+.wire-toggle-btn:hover { color: var(--on-dark); background: rgba(247, 248, 250, 0.08); }
+.wire-toggle-btn.active { background: var(--accent); color: var(--on-dark); }
+
 .btn-tiny {
   background: transparent;
   border: 1px solid rgba(247, 248, 250, 0.25);
@@ -1311,6 +1344,7 @@ hr { border: none; border-top: 1px solid var(--border); }
 .wire-pre .key { color: #9DD3E0; }
 .wire-pre .val { color: rgba(247, 248, 250, 0.85); }
 .wire-pre .scheme { color: #FFB347; font-weight: 500; }
+.wire-pre .aux { color: #6FA8FF; }
 .wire-pre .punct { color: rgba(247, 248, 250, 0.4); }
 
 

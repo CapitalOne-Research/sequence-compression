@@ -555,16 +555,8 @@ function renderOutput(roundTripMs) {
     });
   });
 
-  // wire format preview
-  const wirePayload = {};
-  perColumn.forEach(c => { wirePayload[c.name + '_enc'] = c.wire_value || JSON.stringify([null]); });
-  document.getElementById('wireOutput').innerHTML = formatWireFormat(wirePayload);
-
-  // dynamic row count in the wire-format header
-  const noteEl = document.querySelector('.wire-note');
-  if (noteEl) {
-    noteEl.innerHTML = `representative · row <span class="hot">1</span> of ${state.encoded.row_count.toLocaleString()}`;
-  }
+  // wire format preview — encoded and uncompressed views of row 1
+  renderWireOutput();
 
   // populate §05 — scheme distribution
   renderDistribution();
@@ -882,17 +874,70 @@ function renderAuxKeys(col) {
   return ` <span class="aux-keys" title="auxiliary info dict from row 1 — part of the encoded entry [value, scheme, aux]">aux: ${chips}${more}</span>`;
 }
 
+let _wireView = 'encoded';
+
+function renderWireOutput() {
+  if (!state.encoded) return;
+  const perColumn = state.encoded.per_column;
+  const payload = {};
+  let bytes = 0;
+  if (_wireView === 'uncompressed') {
+    // Row 1 as it was before encoding — the original feature names and
+    // values. Scalars are unwrapped from the server's [v] cell form.
+    perColumn.forEach(c => {
+      const cell = c.wire_orig_cell;
+      const v = cell == null ? null
+        : (!c.is_list && Array.isArray(cell) && cell.length <= 1 ? (cell[0] ?? null) : cell);
+      payload[c.name] = truncatedHtml(JSON.stringify(v));
+      bytes += c.wire_orig_bytes || 0;
+    });
+  } else {
+    perColumn.forEach(c => {
+      payload[c.name + '_enc'] = formatEncodedEntry(c.wire_value || JSON.stringify([null]));
+      bytes += c.wire_value ? c.wire_value.length : 0;
+    });
+  }
+  document.getElementById('wireOutput').innerHTML = formatWireFormat(payload);
+
+  const noteEl = document.querySelector('.wire-note');
+  if (noteEl) {
+    noteEl.innerHTML = `representative · row <span class="hot">1</span> of ${state.encoded.row_count.toLocaleString()} · <span class="hot">${bytes.toLocaleString()} B</span> ${_wireView}`;
+  }
+  document.querySelectorAll('.wire-toggle-btn').forEach(btn => {
+    const on = btn.dataset.view === _wireView;
+    btn.classList.toggle('active', on);
+    btn.setAttribute('aria-pressed', String(on));
+  });
+}
+
+// Escaped HTML for a JSON fragment, eliding the middle of long ones.
+function truncatedHtml(text) {
+  if (text.length <= 360) return escapeHtml(text);
+  return escapeHtml(text.slice(0, 320))
+    + ` … <span class="punct">// ${(text.length - 320).toLocaleString()} chars truncated</span> … `
+    + escapeHtml(text.slice(-30));
+}
+
+// Colour an encoded entry `[value, scheme, aux]` by position rather than by
+// pattern, so the scheme and aux stay highlighted whatever the value holds
+// and however much of it is truncated.
+function formatEncodedEntry(raw) {
+  let parsed = null;
+  try { parsed = JSON.parse(raw); } catch {}
+  if (!Array.isArray(parsed) || parsed.length < 2) return truncatedHtml(raw);
+  const [value, scheme, aux] = parsed;
+  const sep = '<span class="punct">, </span>';
+  let html = '<span class="punct">[</span>' + truncatedHtml(JSON.stringify(value))
+    + sep + `<span class="scheme">${escapeHtml(JSON.stringify(scheme))}</span>`;
+  if (parsed.length >= 3) html += sep + `<span class="aux">${truncatedHtml(JSON.stringify(aux))}</span>`;
+  return html + '<span class="punct">]</span>';
+}
+
 function formatWireFormat(payload) {
   const lines = [`<span class="punct">{</span>`];
   const entries = Object.entries(payload);
-  entries.forEach(([k, v], i) => {
-    let inner = String(v);
-    if (inner.length > 360) {
-      inner = inner.slice(0, 320) + ` … <span class="punct">// ${(v.length - 320).toLocaleString()} chars truncated</span> … ` + inner.slice(-30);
-    }
-    let coloured = escapeHtml(inner);
-    coloured = coloured.replace(/(&quot;[a-z0-9_]+&quot;)(?=,)/g, m => `<span class="scheme">${m}</span>`);
-    lines.push(`  <span class="key">"${escapeHtml(k)}"</span><span class="punct">:</span> <span class="val">${coloured}</span>${i < entries.length - 1 ? '<span class="punct">,</span>' : ''}`);
+  entries.forEach(([k, html], i) => {
+    lines.push(`  <span class="key">"${escapeHtml(k)}"</span><span class="punct">:</span> <span class="val">${html}</span>${i < entries.length - 1 ? '<span class="punct">,</span>' : ''}`);
   });
   lines.push(`<span class="punct">}</span>`);
   return lines.join('\n');
@@ -921,6 +966,13 @@ function setupButtons() {
     state.lossy = e.target.checked;
   });
   document.getElementById('copyWire').addEventListener('click', copyWire);
+  document.querySelectorAll('.wire-toggle-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (btn.dataset.view === _wireView) return;
+      _wireView = btn.dataset.view;
+      renderWireOutput();
+    });
+  });
 }
 
 async function copyWire() {

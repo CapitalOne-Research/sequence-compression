@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Compression Playground · Auto Encoding</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Serif:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<style>
+/* Pipeline colours. Assigned in order of how many users a pipeline wins, so
+   the most common pipeline in any column is always the accent teal. */
+:root {
+  --pl-0: #0E5570;
+  --pl-1: #D08A2E;
+  --pl-2: #6B8F3A;
+  --pl-3: #8A5BA8;
+  --pl-4: #B8514A;
+  --pl-5: #4F9BB5;
+  --pl-6: #8C7A5B;
+  --pl-7: #5C636B;
+  --pl-none: #D5DAE0;
+}
+
+.au-body { font-size: 14px; line-height: 1.65; color: var(--ink-soft); max-width: 72ch; }
+.au-body p { margin: 0 0 14px; }
+
+/* ── §00 intro ─────────────────────────────────────────────────── */
+.au-intro, .au-search { min-width: 0; }
+.au-intro {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 40px;
+  align-items: start;
+}
+.au-code {
+  margin: 0;
+  background: var(--ink);
+  color: rgba(247, 248, 250, 0.88);
+  border-radius: var(--r-md);
+  padding: 18px 20px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 12.5px;
+  line-height: 1.7;
+  overflow-x: auto;
+}
+.au-code .c { color: rgba(247, 248, 250, 0.45); }
+.au-code .k { color: #9FD0E0; }
+.au-code .s { color: #F0C987; }
+.au-code-caption { font-size: 12px; color: var(--muted); margin-top: 10px; }
+
+/* ── §01 explorer ──────────────────────────────────────────────── */
+.au-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 16px;
+  padding-bottom: 18px;
+  margin-bottom: 24px;
+  border-bottom: 1px solid var(--border);
+}
+.au-col-label { font-size: 13px; font-weight: 500; color: var(--ink); }
+.au-select {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 13px;
+  padding: 7px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--ink);
+}
+.au-picks { display: flex; flex-wrap: wrap; gap: 6px; }
+.au-pick {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 12px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--muted);
+  cursor: pointer;
+}
+.au-pick:hover { color: var(--ink); border-color: var(--border-strong); }
+.au-pick[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent-strong); border-color: transparent; }
+.au-controls .lossy-toggle { margin-left: auto; }
+
+.au-headline {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  line-height: 1.3;
+  margin: 0 0 18px;
+  max-width: 40ch;
+}
+.au-headline .num { color: var(--accent); }
+
+.au-explorer {
+  display: grid;
+  grid-template-columns: minmax(0, 440px) minmax(0, 1fr);
+  gap: 40px;
+  align-items: start;
+}
+
+/* the user grid — the centrepiece */
+.au-grid {
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+  gap: 4px;
+}
+.au-tile {
+  aspect-ratio: 1;
+  border: none;
+  padding: 0;
+  border-radius: 3px;
+  cursor: pointer;
+  background: var(--pl-none);
+  transition: transform var(--t-fast) var(--ease), opacity var(--t-base) var(--ease);
+  position: relative;
+}
+.au-tile:hover { transform: scale(1.12); z-index: 1; }
+.au-tile:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.au-tile[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--ink); z-index: 2; }
+.au-grid.filtering .au-tile:not(.match) { opacity: 0.18; }
+.au-grid-caption { font-size: 12px; color: var(--muted); margin-top: 10px; }
+
+.au-legend { list-style: none; margin: 18px 0 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.au-legend button {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 12px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  color: var(--ink);
+}
+.au-legend button:hover, .au-legend button[aria-pressed="true"] { background: var(--surface); border-color: var(--border); }
+.au-swatch { width: 12px; height: 12px; border-radius: 2px; }
+.au-legend-name { font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; }
+.au-legend-count { font-size: 12px; color: var(--muted); font-feature-settings: 'tnum'; }
+
+/* selected user */
+.au-detail {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: 22px 24px;
+  min-width: 0;
+}
+.au-detail-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 16px; }
+.au-detail-user { font-size: 18px; font-weight: 600; color: var(--ink); margin: 0; }
+.au-detail-len { font-size: 12px; color: var(--muted); }
+.au-strip { display: block; width: 100%; height: 72px; margin: 16px 0 6px; }
+.au-strip-caption { font-size: 11.5px; color: var(--muted); display: flex; justify-content: space-between; gap: 12px; }
+.au-pipeline { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 18px 0 14px; }
+.au-pipeline .scheme-chip .label { padding: 4px 10px; }
+.au-pipeline-arrow { color: var(--soft); font-size: 12px; }
+.au-raw-chip {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: var(--r-sm);
+  border: 1px dashed var(--border-strong);
+  color: var(--muted);
+}
+.au-why { list-style: none; margin: 0 0 16px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.au-why li { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 10px; font-size: 13px; line-height: 1.5; }
+.au-why code { font-size: 11.5px; justify-self: start; align-self: start; }
+.au-bytes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--rule);
+  font-feature-settings: 'tnum';
+}
+.au-bytes-from { color: var(--muted); font-size: 13px; text-decoration: line-through; text-decoration-color: var(--soft); }
+.au-bytes-to { font-size: 20px; font-weight: 600; color: var(--ink); }
+.au-bytes-ratio { font-size: 13px; color: var(--pos); font-weight: 500; }
+.au-bytes a { margin-left: auto; font-size: 13px; }
+
+/* contrast trio */
+.au-trio-title { font-size: 15px; font-weight: 600; color: var(--ink); margin: 48px 0 6px; }
+.au-trio-sub { font-size: 13px; color: var(--muted); margin: 0 0 16px; }
+.au-trio { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.au-card {
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-top: 3px solid var(--card-color, var(--pl-none));
+  border-radius: var(--r-md);
+  padding: 14px 16px 16px;
+  cursor: pointer;
+  min-width: 0;
+}
+.au-card:hover { border-color: var(--border-strong); border-top-color: var(--card-color); }
+.au-card:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.au-card-user { font-size: 12px; color: var(--muted); }
+.au-card-scheme { font-family: 'IBM Plex Mono', monospace; font-size: 14px; font-weight: 600; color: var(--ink); margin: 2px 0 8px; }
+.au-card .au-strip { height: 36px; margin: 6px 0 8px; }
+.au-card-why { font-size: 12.5px; line-height: 1.5; color: var(--ink-soft); margin: 0; }
+
+/* ── §02 savings ───────────────────────────────────────────────── */
+.au-bars { display: flex; flex-direction: column; gap: 14px; max-width: 760px; }
+.au-bar-row { display: grid; grid-template-columns: 220px minmax(0, 1fr) 96px; gap: 16px; align-items: center; }
+.au-bar-label { font-size: 13px; color: var(--ink); }
+.au-bar-label small { display: block; font-size: 11.5px; color: var(--muted); font-family: 'IBM Plex Mono', monospace; }
+.au-bar-track { height: 18px; background: var(--bg-elev); border-radius: 2px; overflow: hidden; }
+.au-bar-fill { height: 100%; background: var(--border-strong); transition: width var(--t-slow) var(--ease); }
+.au-bar-row.auto .au-bar-fill { background: var(--accent); }
+.au-bar-value { font-size: 13px; text-align: right; font-feature-settings: 'tnum'; color: var(--ink); }
+.au-savings-note { margin-top: 20px; }
+
+/* ── §03 search ────────────────────────────────────────────────── */
+.au-search { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 40px; align-items: start; }
+.au-graph { display: block; width: 100%; height: auto; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); }
+.au-graph text { font-family: 'IBM Plex Mono', monospace; }
+.au-rules { margin: 0; padding-left: 20px; font-size: 14px; line-height: 1.6; color: var(--ink-soft); }
+.au-rules li { margin-bottom: 10px; }
+
+.au-status { font-size: 13px; color: var(--muted); padding: 24px 0; }
+.au-status.error { color: var(--neg); }
+
+@media (max-width: 1100px) {
+  .au-intro, .au-explorer, .au-search { grid-template-columns: minmax(0, 1fr); }
+  .au-explorer { gap: 28px; }
+  .au-grid-wrap { max-width: 440px; }
+}
+@media (max-width: 700px) {
+  .au-trio { grid-template-columns: 1fr; }
+  .au-bar-row { grid-template-columns: 1fr 80px; gap: 4px 12px; }
+  .au-bar-label { grid-column: 1 / -1; }
+  .au-controls .lossy-toggle { margin-left: 0; }
+  .au-headline { font-size: 18px; }
+  .au-detail { padding: 18px 16px; }
+  .au-bytes a { margin-left: 0; flex-basis: 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .au-tile, .au-bar-fill { transition: none; }
+}
+</style>
+</head>
+<body>
+
+<div class="grain" aria-hidden="true"></div>
+
+<!-- ─────────────────  MASTHEAD  ───────────────── -->
+<header class="masthead">
+  <h1 class="title">
+    <span class="title-roman">Auto</span>
+    <span class="title-italic">Encoding</span>
+  </h1>
+
+  <p class="masthead-tagline">
+    Mark a feature as <code>auto</code> and seqpack searches for the smallest
+    pipeline for each user's sequence on its own. One column can end up with
+    several different pipelines, each matched to the shape of that user's data.
+  </p>
+
+  <nav class="masthead-nav">
+    <a href="/" class="nav-link">
+      <span class="nav-arrow">←</span> encode a file
+    </a>
+    <a href="/inspector.html" class="nav-link">
+      <span class="nav-glyph">✦</span> inspector
+    </a>
+    <a href="/schemes.html" class="nav-link">
+      <span class="nav-glyph">✦</span> schemes
+    </a>
+    <span class="nav-current">
+      <span class="nav-glyph">✦</span> auto
+    </span>
+    <a href="/recsys-use-case.html" class="nav-link">
+      <span class="nav-glyph">✦</span> recsys example <span class="nav-arrow">→</span>
+    </a>
+    <span class="nav-sep" aria-hidden="true"></span>
+    <a href="https://dl.acm.org/doi/epdf/10.1145/3773078.3841279" class="nav-link nav-external" target="_blank" rel="noopener noreferrer">
+      paper <span class="nav-arrow">↗</span>
+    </a>
+    <a href="https://github.com/CapitalOne-Research/sequence-compression" class="nav-link nav-external" target="_blank" rel="noopener noreferrer">
+      code <span class="nav-arrow">↗</span>
+    </a>
+  </nav>
+
+  <div class="hot-rule"></div>
+</header>
+
+
+<!-- ─────────────────  §00 ONE FLAG  ───────────────── -->
+<section class="section">
+  <div class="section-num">§ 00.</div>
+  <h2 class="section-title">One flag <em>per feature</em></h2>
+  <div class="section-body au-intro">
+    <div class="au-body">
+      <p class="lede">
+        Picking a pipeline by hand means choosing one answer for every user in
+        a column. User behaviour isn't that uniform: one user never likes
+        anything, another likes a few videos back to back, a third likes
+        scattered videos all through their history.
+      </p>
+      <p>
+        With <code>auto</code>, the choice moves from the column to the row.
+        For each user's sequence, seqpack tries every valid combination of
+        schemes up to three steps deep, measures the encoded bytes, and keeps
+        the smallest. If nothing beats the raw sequence, the row is stored
+        unencoded.
+      </p>
+      <p>
+        Every encoded row records the pipeline it used, so decoding needs no
+        per-column configuration: <code>decode_feature_payload</code> reads the
+        pipeline name from each entry and reverses it.
+      </p>
+    </div>
+    <div>
+<pre class="au-code"><span class="k">from</span> seqpack <span class="k">import</span> encode_feature_df, decode_feature_payload
+
+encoded = encode_feature_df(df, {
+    <span class="s">"is_like"</span>: <span class="s">"auto"</span>,
+    <span class="s">"date"</span>:    <span class="s">"auto"</span>,
+    <span class="s">"tab"</span>:     <span class="s">"auto"</span>,
+})
+
+<span class="c"># each row stores [value, pipeline, aux]</span>
+<span id="auCodeRows"></span></pre>
+      <p class="au-code-caption">
+        Pipelines above are from the <code>is_like</code> column of the demo
+        dataset.
+      </p>
+    </div>
+  </div>
+</section>
+
+
+<!-- ─────────────────  §01 EXPLORER  ───────────────── -->
+<section class="section">
+  <div class="section-num">§ 01.</div>
+  <h2 class="section-title">One column, <em>many pipelines</em></h2>
+  <div class="section-body">
+    <div class="au-controls">
+      <label class="au-col-label" for="auColumn">Feature</label>
+      <select id="auColumn" class="au-select" aria-label="Feature column"></select>
+      <div class="au-picks" id="auPicks" aria-label="Suggested features"></div>
+      <label class="lossy-toggle" title="Let auto consider lossy schemes (quant, tbqm, tbqp). Only float features such as embeddings are affected.">
+        <input type="checkbox" id="auLossy">
+        allow lossy
+      </label>
+    </div>
+
+    <div id="auStatus" class="au-status" role="status">Encoding the demo dataset…</div>
+
+    <div id="auExplorer" class="hidden">
+      <p class="au-headline" id="auHeadline"></p>
+
+      <div class="au-explorer">
+        <div class="au-grid-wrap">
+          <div class="au-grid" id="auGrid" role="group" aria-label="Users, coloured by the pipeline auto chose"></div>
+          <p class="au-grid-caption">
+            Each square is one user from the KuaiRand demo sample. Select a
+            square to see that user's sequence, or a pipeline below to highlight
+            its users.
+          </p>
+          <ul class="au-legend" id="auLegend"></ul>
+        </div>
+
+        <div class="au-detail" id="auDetail" aria-live="polite"></div>
+      </div>
+
+      <h3 class="au-trio-title">Same feature, different answers</h3>
+      <p class="au-trio-sub" id="auTrioSub"></p>
+      <div class="au-trio" id="auTrio"></div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ─────────────────  §02 SAVINGS  ───────────────── -->
+<section class="section" id="auSavingsSection">
+  <div class="section-num">§ 02.</div>
+  <h2 class="section-title">Per user beats <em>one size fits all</em></h2>
+  <div class="section-body">
+    <p class="au-body" id="auSavingsLede">
+      Total bytes for the selected feature across all users, compared with
+      forcing a single pipeline onto every row. The single pipeline is the best
+      of the ones auto picked anywhere in the column; rows it can't encode, or
+      doesn't shrink, fall back to raw, just as <code>encode_feature</code> does.
+    </p>
+    <div class="au-bars" id="auBars"></div>
+    <p class="au-body au-savings-note" id="auSavingsNote"></p>
+  </div>
+</section>
+
+
+<!-- ─────────────────  §03 SEARCH  ───────────────── -->
+<section class="section">
+  <div class="section-num">§ 03.</div>
+  <h2 class="section-title">How auto <em>searches</em></h2>
+  <div class="section-body au-search">
+    <svg class="au-graph" viewBox="0 0 630 360" role="img"
+         aria-labelledby="auGraphTitle auGraphDesc">
+      <title id="auGraphTitle">Scheme transitions auto can follow</title>
+      <desc id="auGraphDesc">Strings go through cat and floats through quant, tbqm or tbqp; both produce an integer sequence. Integer inputs start there directly, and binary inputs can too. An integer sequence can go through del, stl or rle, which produce integers again, or end in bp or nbp. Binary sequences can also end in bm.</desc>
+      <defs>
+        <marker id="auArrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="#98A0AB"/>
+        </marker>
+      </defs>
+
+      <g font-size="11" fill="#5C636B">
+        <text x="20" y="22">input type</text>
+        <text x="495" y="22">pack (last step)</text>
+      </g>
+
+      <!-- input types -->
+      <g font-size="13" font-weight="600" text-anchor="middle" fill="#083E51">
+        <rect x="20" y="32"  width="110" height="36" rx="6" fill="#F0F5F7" stroke="#0E5570"/>
+        <text x="75" y="55">string</text>
+        <rect x="20" y="102" width="110" height="36" rx="6" fill="#F0F5F7" stroke="#0E5570"/>
+        <text x="75" y="125">float</text>
+        <rect x="20" y="172" width="110" height="36" rx="6" fill="#F0F5F7" stroke="#0E5570"/>
+        <text x="75" y="195">int</text>
+        <rect x="20" y="272" width="110" height="36" rx="6" fill="#F0F5F7" stroke="#0E5570"/>
+        <text x="75" y="295">binary 0/1</text>
+      </g>
+
+      <!-- transforms that turn non-integers into integers -->
+      <g font-size="12.5" text-anchor="middle" fill="#0F1115">
+        <rect x="158" y="32"  width="164" height="36" rx="6" fill="#FFFFFF" stroke="#C5CAD2"/>
+        <text x="240" y="55">cat</text>
+        <rect x="158" y="102" width="164" height="36" rx="6" fill="#FFFFFF" stroke="#C5CAD2"/>
+        <text x="240" y="125">quant · tbqm · tbqp</text>
+      </g>
+
+      <!-- the integer sequence every route passes through -->
+      <rect x="330" y="170" width="124" height="40" rx="20" fill="#DDE9EE" stroke="#0E5570"/>
+      <text x="392" y="195" font-size="13" font-weight="600" text-anchor="middle" fill="#083E51">int sequence</text>
+
+      <!-- reducers: int in, int out -->
+      <rect x="490" y="92" width="125" height="36" rx="6" fill="#FFFFFF" stroke="#C5CAD2"/>
+      <text x="552" y="115" font-size="12.5" text-anchor="middle" fill="#0F1115">del · stl · rle</text>
+
+      <!-- packers -->
+      <g font-size="12.5" font-weight="600" text-anchor="middle" fill="#F7F8FA">
+        <rect x="490" y="172" width="125" height="36" rx="6" fill="#0F1115"/>
+        <text x="552" y="195">bp · nbp</text>
+        <rect x="490" y="272" width="125" height="36" rx="6" fill="#0F1115"/>
+        <text x="552" y="295">bm</text>
+      </g>
+
+      <g fill="none" stroke="#98A0AB" stroke-width="1.4" marker-end="url(#auArrow)">
+        <path d="M130 50 H154"/>
+        <path d="M130 120 H154"/>
+        <!-- cat and the float quantizers emit ints -->
+        <path d="M322 50 C392 50 410 110 410 166"/>
+        <path d="M322 120 C362 120 375 140 375 166"/>
+        <!-- raw ints start at the int sequence -->
+        <path d="M130 190 H326"/>
+        <!-- reduce and come back as ints -->
+        <path d="M430 170 C440 125 460 104 486 104"/>
+        <path d="M510 128 C505 160 480 176 458 180"/>
+        <!-- pack -->
+        <path d="M454 196 H486"/>
+        <!-- binary: bitmap, or treat as ints -->
+        <path d="M130 290 H486"/>
+        <path d="M130 282 C260 282 380 266 390 214"/>
+      </g>
+      <g font-size="10.5" fill="#5C636B">
+        <text x="470" y="152" text-anchor="middle">repeat</text>
+        <text x="180" y="262">or treat as ints</text>
+        <text x="20" y="334">Up to 3 steps in all. Black boxes output packed bits, so they end a pipeline.</text>
+        <text x="20" y="350">A string sequence can also end with rle.</text>
+      </g>
+    </svg>
+
+    <ol class="au-rules">
+      <li>Detect the element type of the sequence: binary, integer, float or string.</li>
+      <li>Try every scheme that accepts that type, then every scheme that accepts
+        what it outputs, up to three steps deep. A step that looks larger on its
+        own is still explored: <code>cat</code> alone grows a sequence, but
+        <code>cat_rle_bp</code> can shrink it a lot.</li>
+      <li>Steps that write metadata (<code>cat</code>, <code>del</code>,
+        <code>stl</code>, <code>quant</code>) appear at most once. Packers
+        (<code>bm</code>, <code>bp</code>, <code>nbp</code>) output a bitstream,
+        so they can only be the last step.</li>
+      <li>Measure each candidate as it would be stored, including the pipeline
+        name and its metadata, and keep the smallest.</li>
+      <li>If no pipeline beats the raw sequence, keep the raw sequence.</li>
+    </ol>
+  </div>
+</section>
+
+
+<!-- ─────────────────  STATUS BAR  ───────────────── -->
+<footer class="status-bar">
+  <span class="status-dot" id="statusDot"></span>
+  <span id="statusLabel">AUTO</span>
+  <span class="status-sep">━━</span>
+  <span id="statusDetail">per-user pipeline search · KuaiRand demo sample</span>
+  <span class="status-spacer"></span>
+  <span class="status-meta">compression playground · auto</span>
+</footer>
+
+<script src="auto-encoding.js"></script>
+
+</body>
+</html>

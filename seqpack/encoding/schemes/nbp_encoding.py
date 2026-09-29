@@ -8,6 +8,7 @@ from seqpack.utils.bitpack import (
     encode_count,
     encode_signed_varint,
     pack_bits,
+    to_int_list,
 )
 
 
@@ -27,7 +28,7 @@ def encode(values: list[int]) -> tuple[str, dict]:
     if len(values) == 0:
         return "", {}
 
-    values = [int(v) for v in values]
+    values = to_int_list(values, "nbp")
     count = len(values)
 
     # Find dominant value

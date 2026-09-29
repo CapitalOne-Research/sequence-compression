@@ -13,6 +13,29 @@ from __future__ import annotations
 
 import numpy as np
 
+from seqpack.exceptions import InvalidInputError
+
+
+def to_int_list(values, scheme: str) -> list[int]:
+    """Convert packer input to ints, rejecting anything `int()` would change.
+
+    Integer-valued floats (e.g. 3.0) are accepted; fractional floats, NaN,
+    infinities, and non-numerics raise instead of being silently truncated.
+    """
+    ints = []
+    for v in values:
+        try:
+            i = int(v)
+        except (TypeError, ValueError, OverflowError):
+            i = None
+        if i is None or i != v:
+            raise InvalidInputError(
+                f"{scheme} requires integer values, got {v!r}; "
+                f"use quant, tbqm, or tbqp before packing floats"
+            )
+        ints.append(i)
+    return ints
+
 
 def encode_varint(n: int) -> bytes:
     """Encode an unsigned integer as a varint (LEB128)."""
